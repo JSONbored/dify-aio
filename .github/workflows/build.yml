@@ -1,0 +1,643 @@
+name: CI / Dify AIO
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+      - Dockerfile
+      - cliff.toml
+      - pyproject.toml
+      - requirements-dev.txt
+      - docs/upstream/**
+      - "*.xml"
+      - assets/**
+      - rootfs/**
+      - scripts/**
+      - tests/**
+      - .trunk/**
+      - .github/actions/**
+      - upstream.toml
+      - components.toml
+      - components/**
+      - renovate.json
+      - .github/workflows/**
+  pull_request:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+      - Dockerfile
+      - cliff.toml
+      - pyproject.toml
+      - requirements-dev.txt
+      - docs/upstream/**
+      - "*.xml"
+      - assets/**
+      - rootfs/**
+      - scripts/**
+      - tests/**
+      - .trunk/**
+      - .github/actions/**
+      - upstream.toml
+      - components.toml
+      - components/**
+      - renovate.json
+      - .github/workflows/**
+  workflow_dispatch:
+    inputs:
+      run_extended_integration:
+        description: Run sidecar-backed external provider integration tests
+        required: false
+        default: false
+        type: boolean
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jsonbored/dify-aio
+  PYTHON_VERSION: "3.13"
+  TRUNK_ORG_URL_SLUG: aethereal
+  DOCKER_CACHE_SCOPE: dify-aio-image
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      build_related: ${{ steps.filter.outputs.build_related }}
+      xml_related: ${{ steps.filter.outputs.xml_related }}
+      renovate_related: ${{ steps.filter.outputs.renovate_related }}
+      tooling_related: ${{ steps.filter.outputs.tooling_related }}
+      workflow_related: ${{ steps.filter.outputs.workflow_related }}
+      run_tests_requested: ${{ steps.filter.outputs.run_tests_requested }}
+      publish_requested: ${{ steps.filter.outputs.publish_requested }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed files
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before || '' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_SHA_VALUE: ${{ github.sha }}
+          GITHUB_REF_VALUE: ${{ github.ref }}
+        run: |
+          python3 scripts/ci_flags.py \
+            --event-name "${EVENT_NAME}" \
+            --ref "${GITHUB_REF_VALUE}" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "build_related=true" >> "${GITHUB_OUTPUT}"
+            echo "xml_related=true" >> "${GITHUB_OUTPUT}"
+            echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
+            echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
+            echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            base="${BASE_SHA}"
+            head="${HEAD_SHA}"
+          else
+            base="${BEFORE_SHA}"
+            head="${GITHUB_SHA_VALUE}"
+          fi
+
+          if ! git rev-parse --git-dir >/dev/null 2>&1; then
+            echo "Git metadata is unavailable; treating the workflow as fully impacted."
+            echo "build_related=true" >> "${GITHUB_OUTPUT}"
+            echo "xml_related=true" >> "${GITHUB_OUTPUT}"
+            echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
+            echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
+            echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ -z "${base}" || "${base}" =~ ^0+$ ]]; then
+            if ! changed_files="$(git show --pretty='' --name-only "${head}" 2>/dev/null)"; then
+              echo "Unable to inspect commit range; treating the workflow as fully impacted."
+              echo "build_related=true" >> "${GITHUB_OUTPUT}"
+              echo "xml_related=true" >> "${GITHUB_OUTPUT}"
+              echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
+              echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
+              echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          else
+            if ! changed_files="$(git diff --name-only "${base}" "${head}" 2>/dev/null)"; then
+              echo "Unable to diff commit range; treating the workflow as fully impacted."
+              echo "build_related=true" >> "${GITHUB_OUTPUT}"
+              echo "xml_related=true" >> "${GITHUB_OUTPUT}"
+              echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
+              echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
+              echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          fi
+
+          printf 'Changed files:\n%s\n' "${changed_files}"
+
+          build_related=false
+          xml_related=false
+          renovate_related=false
+          tooling_related=false
+          workflow_related=false
+
+          while IFS= read -r path; do
+            [[ -z "${path}" ]] && continue
+            case "${path}" in
+              Dockerfile|pyproject.toml|requirements-dev.txt|upstream.toml|components.toml|components/*|rootfs/*|tests/*|docs/upstream/*)
+                build_related=true
+                ;;
+              *.xml|assets/*)
+                xml_related=true
+                ;;
+              CHANGELOG.md|cliff.toml|scripts/*|.trunk/*)
+                tooling_related=true
+                ;;
+              .github/actions/**|.github/workflows/*)
+                tooling_related=true
+                workflow_related=true
+                ;;
+              renovate.json)
+                renovate_related=true
+                ;;
+            esac
+          done <<< "${changed_files}"
+
+          echo "build_related=${build_related}" >> "${GITHUB_OUTPUT}"
+          echo "xml_related=${xml_related}" >> "${GITHUB_OUTPUT}"
+          echo "renovate_related=${renovate_related}" >> "${GITHUB_OUTPUT}"
+          echo "tooling_related=${tooling_related}" >> "${GITHUB_OUTPUT}"
+          echo "workflow_related=${workflow_related}" >> "${GITHUB_OUTPUT}"
+
+  validate-template:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.build_related == 'true' || needs.detect-changes.outputs.xml_related == 'true' || needs.detect-changes.outputs.renovate_related == 'true' || needs.detect-changes.outputs.tooling_related == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install validation dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Validate shell and python scripts
+        if: ${{ needs.detect-changes.outputs.build_related == 'true' || needs.detect-changes.outputs.tooling_related == 'true' }}
+        run: |
+          bash -n scripts/validate-derived-repo.sh
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/ci_flags.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/check-upstream.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/components.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/generate_dify_template.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/validate-template.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/update-template-changes.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/release.py
+          find rootfs -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          find rootfs -type f -path '*/run' -print0 | xargs -0 -n1 bash -n
+
+      - name: Validate XML
+        if: ${{ needs.detect-changes.outputs.build_related == 'true' || needs.detect-changes.outputs.xml_related == 'true' }}
+        run: python3 scripts/validate-template.py --all
+
+      - name: Validate derived repo placeholders
+        run: |
+          chmod +x scripts/validate-derived-repo.sh
+          ./scripts/validate-derived-repo.sh .
+
+      - name: Validate Renovate config
+        if: ${{ needs.detect-changes.outputs.renovate_related == 'true' }}
+        run: npx --yes --package renovate renovate-config-validator renovate.json
+
+  pinned-actions:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Skip when workflow files are unchanged
+        if: ${{ needs.detect-changes.outputs.workflow_related != 'true' }}
+        run: echo "Workflow files unchanged; skipping pinned action scan."
+
+      - name: Checkout
+        if: ${{ needs.detect-changes.outputs.workflow_related == 'true' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Enforce pinned action SHAs
+        if: ${{ needs.detect-changes.outputs.workflow_related == 'true' }}
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          workflow_paths = [
+              *pathlib.Path(".github/workflows").glob("*.yml"),
+              *pathlib.Path(".github/actions").glob("*/action.yml"),
+          ]
+          pattern = re.compile(r"^\s*uses:\s*([^@\s]+)@([^\s#]+)")
+          sha_pattern = re.compile(r"^[0-9a-f]{40}$")
+          failures = []
+
+          for path in sorted(workflow_paths):
+              for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                  match = pattern.match(line)
+                  if not match:
+                      continue
+                  target, ref = match.groups()
+                  if target.startswith("./"):
+                      continue
+                  if not sha_pattern.fullmatch(ref):
+                      failures.append(f"{path}:{lineno}: action is not pinned to a full SHA -> {line.strip()}")
+
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              sys.exit(1)
+          print("All workflow actions are pinned to full commit SHAs.")
+          PY
+
+  dependency-review:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Detect dependency review support
+        id: support
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          support_state="$(
+            gh api "repos/${GITHUB_REPOSITORY}" \
+              --jq 'if .security_and_analysis == null then "unsupported" else "supported" end'
+          )"
+
+          if [[ "${support_state}" == "supported" ]]; then
+            echo "supported=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "supported=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Skip when dependency review is unsupported
+        if: ${{ steps.support.outputs.supported != 'true' }}
+        run: echo "Dependency review is unsupported for this repository; skipping."
+
+      - name: Dependency review
+        if: ${{ steps.support.outputs.supported == 'true' }}
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+
+  unit-tests:
+    if: ${{ needs.detect-changes.outputs.build_related == 'true' || needs.detect-changes.outputs.xml_related == 'true' || needs.detect-changes.outputs.tooling_related == 'true' }}
+    needs:
+      - detect-changes
+      - validate-template
+      - pinned-actions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install pytest
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run unit and template tests
+        uses: ./.github/actions/run-pytest
+        with:
+          junit-path: reports/pytest-unit.xml
+          pytest-args: tests/unit tests/template
+          trunk-api-token: ${{ env.TRUNK_API_TOKEN }}
+          trunk-org-slug: ${{ env.TRUNK_ORG_URL_SLUG }}
+
+  integration-tests:
+    if: ${{ needs.detect-changes.outputs.run_tests_requested == 'true' && needs.detect-changes.outputs.build_related == 'true' }}
+    needs:
+      - detect-changes
+      - validate-template
+      - pinned-actions
+      - unit-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Prebuild pytest image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: dify-aio:pytest
+          cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}
+
+      - name: Install pytest
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run integration tests
+        env:
+          AIO_PYTEST_USE_PREBUILT_IMAGE: "true"
+        uses: ./.github/actions/run-pytest
+        with:
+          junit-path: reports/pytest-integration.xml
+          pytest-args: tests/integration -m integration
+          trunk-api-token: ${{ env.TRUNK_API_TOKEN }}
+          trunk-org-slug: ${{ env.TRUNK_ORG_URL_SLUG }}
+
+      - name: Dump Docker diagnostics
+        if: ${{ failure() }}
+        run: |
+          docker ps -a
+          echo
+          docker images
+
+  extended-integration-tests:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_extended_integration == true && needs.detect-changes.outputs.build_related == 'true' && needs.integration-tests.result == 'success' }}
+    needs:
+      - detect-changes
+      - validate-template
+      - pinned-actions
+      - unit-tests
+      - integration-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Prebuild pytest image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: dify-aio:pytest
+          cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}
+
+      - name: Install pytest
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run extended integration tests
+        env:
+          AIO_PYTEST_USE_PREBUILT_IMAGE: "true"
+        uses: ./.github/actions/run-pytest
+        with:
+          junit-path: reports/pytest-extended-integration.xml
+          pytest-args: tests/integration -m extended_integration
+          trunk-api-token: ${{ env.TRUNK_API_TOKEN }}
+          trunk-org-slug: ${{ env.TRUNK_ORG_URL_SLUG }}
+
+      - name: Dump Docker diagnostics
+        if: ${{ failure() }}
+        run: |
+          docker ps -a
+          echo
+          docker images
+
+  publish:
+    if: ${{ needs.detect-changes.outputs.build_related == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.publish_requested == 'true' && needs.integration-tests.result == 'success' }}
+    needs:
+      - detect-changes
+      - validate-template
+      - pinned-actions
+      - unit-tests
+      - integration-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: prep
+        run: |
+          image="$(printf '%s' "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
+          sha_tag="${image}:sha-${GITHUB_SHA}"
+          upstream_version="$(python3 scripts/release.py upstream-version)"
+          upstream_api_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_API_DIGEST=//p' Dockerfile | head -n1)"
+          upstream_web_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_WEB_DIGEST=//p' Dockerfile | head -n1)"
+          upstream_sandbox_version="$(sed -n 's/^ARG UPSTREAM_DIFY_SANDBOX_VERSION=//p' Dockerfile | head -n1)"
+          upstream_sandbox_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_SANDBOX_DIGEST=//p' Dockerfile | head -n1)"
+          upstream_plugin_daemon_version="$(sed -n 's/^ARG UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION=//p' Dockerfile | head -n1)"
+          upstream_plugin_daemon_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_PLUGIN_DAEMON_DIGEST=//p' Dockerfile | head -n1)"
+          changelog_version="$(python3 scripts/release.py latest-changelog-version 2>/dev/null || true)"
+          release_commit_pattern="^chore\\(release\\): $(python3 -c 'import re, sys; print(re.escape(sys.argv[1]))' "${changelog_version}")( \\(#[0-9]+\\))?$"
+          commit_message="$(git log -1 --pretty=%B)"
+          release_package_tag=""
+          version_label="${upstream_version}"
+          wrapper_track="main"
+          case "${changelog_version}" in
+            "${upstream_version}"-aio.*)
+              candidate_revision="${changelog_version##*.}"
+              if [[ "${candidate_revision}" =~ ^[0-9]+$ ]] && printf '%s\n' "${commit_message}" | grep -Eq "${release_commit_pattern}"; then
+                release_package_tag="${changelog_version}"
+                version_label="${release_package_tag}"
+                wrapper_track="aio-v${candidate_revision}"
+              fi
+              ;;
+          esac
+
+          {
+            echo "upstream_version=${upstream_version}"
+            echo "upstream_api_digest=${upstream_api_digest}"
+            echo "upstream_web_digest=${upstream_web_digest}"
+            echo "upstream_sandbox_version=${upstream_sandbox_version}"
+            echo "upstream_sandbox_digest=${upstream_sandbox_digest}"
+            echo "upstream_plugin_daemon_version=${upstream_plugin_daemon_version}"
+            echo "upstream_plugin_daemon_digest=${upstream_plugin_daemon_digest}"
+            echo "release_package_tag=${release_package_tag}"
+            echo "version_label=${version_label}"
+            echo "wrapper_track=${wrapper_track}"
+            echo "tags<<EOF"
+            echo "${image}:latest"
+            echo "${image}:${upstream_version}"
+            if [[ -n "${release_package_tag}" ]]; then
+              echo "${image}:${release_package_tag}"
+            fi
+            echo "${sha_tag}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}
+          tags: ${{ steps.prep.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/JSONbored/dify-aio
+            org.opencontainers.image.title=dify-aio
+            org.opencontainers.image.version=${{ steps.prep.outputs.version_label || '' }}
+            org.opencontainers.image.description=Unraid-first AIO wrapper image for Dify
+            io.jsonbored.upstream.name=Dify
+            io.jsonbored.upstream.dify.version=${{ steps.prep.outputs.upstream_version || '' }}
+            io.jsonbored.upstream.dify.api.digest=${{ steps.prep.outputs.upstream_api_digest || '' }}
+            io.jsonbored.upstream.dify.web.digest=${{ steps.prep.outputs.upstream_web_digest || '' }}
+            io.jsonbored.upstream.dify_sandbox.version=${{ steps.prep.outputs.upstream_sandbox_version || '' }}
+            io.jsonbored.upstream.dify_sandbox.digest=${{ steps.prep.outputs.upstream_sandbox_digest || '' }}
+            io.jsonbored.upstream.dify_plugin_daemon.version=${{ steps.prep.outputs.upstream_plugin_daemon_version || '' }}
+            io.jsonbored.upstream.dify_plugin_daemon.digest=${{ steps.prep.outputs.upstream_plugin_daemon_digest || '' }}
+            io.jsonbored.wrapper.name=dify-aio
+            io.jsonbored.wrapper.type=unraid-aio
+            io.jsonbored.wrapper.track=${{ steps.prep.outputs.wrapper_track || '' }}
+
+  sync-awesome-unraid:
+    if: ${{ needs.detect-changes.outputs.xml_related == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    needs:
+      - detect-changes
+      - validate-template
+      - pinned-actions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TEMPLATE_XML: ${{ vars.TEMPLATE_XML || 'dify-aio.xml' }}
+      TEMPLATE_ICON_PATH: ${{ vars.TEMPLATE_ICON_PATH || 'assets/app-icon.png' }}
+      TARGET_REPOSITORY: ${{ vars.AWESOME_UNRAID_REPOSITORY || 'JSONbored/awesome-unraid' }}
+      TARGET_XML_NAME: ${{ vars.AWESOME_UNRAID_XML_NAME || 'dify-aio.xml' }}
+      TARGET_ICON_NAME: ${{ vars.AWESOME_UNRAID_ICON_NAME || 'dify.png' }}
+    steps:
+      - name: Check sync configuration
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          if [[ -z "${SYNC_TOKEN}" ]]; then
+            echo "SYNC_ENABLED=false" >> "${GITHUB_ENV}"
+            echo "SYNC_TOKEN is not configured; skipping sync."
+          else
+            echo "SYNC_ENABLED=true" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Checkout Source Repository
+        if: ${{ env.SYNC_ENABLED == 'true' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Checkout Target Repository
+        if: ${{ env.SYNC_ENABLED == 'true' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.TARGET_REPOSITORY }}
+          token: ${{ secrets.SYNC_TOKEN }}
+          path: target-repo
+
+      - name: Copy and commit catalog assets
+        if: ${{ env.SYNC_ENABLED == 'true' }}
+        run: |
+          cp "${TEMPLATE_XML}" "target-repo/${TARGET_XML_NAME}"
+          mkdir -p target-repo/icons
+          cp "${TEMPLATE_ICON_PATH}" "target-repo/icons/${TARGET_ICON_NAME}"
+
+      - name: Create sync pull request
+        if: ${{ env.SYNC_ENABLED == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          cd target-repo
+          branch="sync-awesome-unraid/dify-aio"
+          title="ci(sync): sync dify-aio catalog assets"
+          body="Automated sync from \`${SOURCE_REPOSITORY}\`."
+
+          if [[ -z "$(git status --porcelain -- "${TARGET_XML_NAME}" "icons/${TARGET_ICON_NAME}")" ]]; then
+            echo "No awesome-unraid changes to sync."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "${branch}"
+          git add "${TARGET_XML_NAME}" "icons/${TARGET_ICON_NAME}"
+          git commit -m "ci(sync): auto-sync dify-aio assets"
+          git push --force origin "HEAD:${branch}"
+
+          existing_pr="$(gh pr list \
+            --repo "${TARGET_REPOSITORY}" \
+            --head "${branch}" \
+            --base main \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [[ -n "${existing_pr}" ]]; then
+            gh pr edit "${existing_pr}" \
+              --repo "${TARGET_REPOSITORY}" \
+              --title "${title}" \
+              --body "${body}"
+          else
+            gh pr create \
+              --repo "${TARGET_REPOSITORY}" \
+              --head "${branch}" \
+              --base main \
+              --title "${title}" \
+              --body "${body}"
+          fi

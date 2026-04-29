@@ -1,0 +1,16 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+
+if ! is_true "${DIFY_USE_INTERNAL_POSTGRES:-true}"; then
+	aio_log "External PostgreSQL mode enabled; keeping bundled PostgreSQL idle."
+	exec sleep infinity
+fi
+
+PG_VERSION="$(ls /usr/lib/postgresql | sort -V | tail -n1)"
+PGDATA="/appdata/postgres"
+
+exec su postgres -s /bin/sh -c "/usr/lib/postgresql/${PG_VERSION}/bin/postgres -D \"${PGDATA}\" -c listen_addresses='127.0.0.1'"

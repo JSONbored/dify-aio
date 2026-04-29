@@ -1,0 +1,14 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+configure_dify_env
+
+wait_for_http_url "http://127.0.0.1:5001/health" "Dify API"
+
+export PORT="${DIFY_WEB_PORT:-3000}"
+export HOSTNAME="${DIFY_WEB_HOST:-0.0.0.0}"
+cd /opt/dify-web
+exec ./entrypoint.sh

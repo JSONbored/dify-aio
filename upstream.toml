@@ -1,0 +1,11 @@
+[upstream]
+name = "Dify"
+type = "github-release"
+repo = "langgenius/dify"
+version_source = "dockerfile-arg"
+version_key = "UPSTREAM_DIFY_VERSION"
+strategy = "notify"
+stable_only = true
+
+[notifications]
+release_notes_url = "https://github.com/langgenius/dify/releases"
