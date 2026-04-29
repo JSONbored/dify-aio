@@ -1,90 +1,121 @@
 # dify-aio
 
+![dify-aio](https://socialify.git.ci/JSONbored/dify-aio/image?custom_description=Dify+offers+everything+you+need+%E2%80%94+agentic+workflows%2C+RAG+pipelines%2C+integrations%2C+and+observability+%E2%80%94+all+in+one+place%2C+putting+AI+power+into+your+hands.&custom_language=Dockerfile&description=1&font=Raleway&forks=1&issues=1&language=1&logo=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F127165244%3Fs%3D200%26v%3D4&name=1&owner=1&pattern=Floating+Cogs&pulls=1&stargazers=1&theme=Light)
+
 Unraid-first AIO wrapper for [Dify](https://github.com/langgenius/dify), an open-source platform for building agentic workflows, chat apps, knowledge-base apps, and LLM-backed automations.
 
-This image intentionally keeps Dify installable as one Unraid template while still exposing the important escape hatches. It bundles the Dify API, background workers, worker beat, web UI, plugin daemon, code sandbox, SSRF proxy, Nginx, PostgreSQL 15 with pgvector, and Redis.
+`dify-aio` packages the practical self-hosted Dify stack into one Unraid-friendly image with persistent appdata, first-boot secret generation, and an advanced template surface for operators who need external databases, vector stores, object storage, mail, observability, sandbox, plugin, and datasource settings.
 
 ## Status
 
-This repository is pre-release, but the source template and local container boot path are now covered by pytest-backed validation. Treat Community Applications submission as a separate catalog/support-thread step.
+This repository is pre-release. The source template, generated XML, and local container boot path are covered by pytest-backed validation. Community Applications submission is intentionally separate and should happen only after the source template is finalized.
 
-## What Is Included
+## What This Image Includes
 
-- Dify API and worker services from `langgenius/dify-api`
+- Dify API, worker, and beat services from `langgenius/dify-api`
 - Dify web UI from `langgenius/dify-web`
-- Dify sandbox from `langgenius/dify-sandbox`
 - Dify plugin daemon from `langgenius/dify-plugin-daemon`
-- bundled PostgreSQL 15 with pgvector by default
-- bundled Redis by default
+- Dify sandbox from `langgenius/dify-sandbox`
 - Nginx gateway on port `8080`
 - SSRF proxy for sandboxed code execution
+- bundled PostgreSQL 15 with pgvector by default
+- bundled Redis by default
 - first-boot secret generation under `/appdata/config/generated.env`
+- optional `/appdata/config/extra.env` escape hatch for rare upstream variables
+- Unraid CA source template at [dify-aio.xml](dify-aio.xml)
 
-## First Run
+## Beginner Install
+
+If you want the simplest supported path:
 
 1. Install the Unraid template with the default settings.
-2. Open `http://<unraid-ip>:8080/install`.
-3. Create the initial admin account.
-4. Add model-provider keys, SMTP, storage, and datasource credentials inside Dify as needed.
+2. Start the container and wait for the first boot to complete.
+3. Open `http://<unraid-ip>:8080/install`.
+4. Create the initial admin account.
+5. Add model-provider keys, SMTP, storage, datasource, and integration credentials inside Dify as needed.
 
 If `INIT_PASSWORD` is set in the template, Dify uses it as the initial admin password. Dify limits that value to 30 characters.
 
-## Persistent Data
+For most users, the default bundled PostgreSQL, pgvector, Redis, sandbox, plugin daemon, and local file storage path is the right first install.
 
-The template mounts one AppData path:
+## Power User Surface
 
-- `/appdata`
+This repo is deliberately not a stripped-down wrapper. The generated Unraid template exposes the practical Dify self-hosted environment surface while keeping the first-run form small enough to use.
 
-That path stores generated secrets, PostgreSQL data, Redis data, uploads, plugin daemon state, sandbox configuration, and local file storage.
+In Advanced View you can:
 
-## Common Configuration
+- move PostgreSQL out of the container with `DIFY_USE_INTERNAL_POSTGRES=false` and external `DB_*` settings
+- move Redis out of the container with `DIFY_USE_INTERNAL_REDIS=false` and external `REDIS_*` settings
+- select external vector stores such as Qdrant, Weaviate, Milvus, Chroma, OpenSearch, Elasticsearch, Upstash, and other upstream-supported backends
+- use local OpenDAL filesystem storage or configure S3-compatible object storage and other upstream storage providers
+- configure Resend or SMTP mail delivery
+- configure sandbox, SSRF proxy, plugin daemon, marketplace, upload, datasource, Notion, Unstructured, Sentry, and OpenTelemetry settings
+- set `DIFY_AIO_PUBLIC_URL` for reverse-proxy deployments so Dify URL settings derive from one public base URL
+- put rare upstream-only variables in `/appdata/config/extra.env` instead of expanding the Unraid form with every possible knob
 
-The default install uses bundled PostgreSQL, pgvector, and Redis.
+Placeholder upstream defaults such as `your-bucket-name` are intentionally blanked in the CA template so external integrations fail closed until you provide real values.
 
-Power-user overrides:
+## Runtime Notes
 
-- set `DIFY_AIO_PUBLIC_URL` when Dify is behind a reverse proxy
-- use the advanced Dify settings for the real operator surface: URLs, DB/Redis, vector stores, storage backends, mail, sandbox, plugins, observability, uploads, and common integrations
-- put rare upstream-only variables in `/appdata/config/extra.env` instead of expanding the Unraid form with every Dify knob
-- set `DIFY_USE_INTERNAL_POSTGRES=false` and provide `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, and `DB_DATABASE` for external PostgreSQL
-- set `DIFY_USE_INTERNAL_REDIS=false` and provide `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD` for external Redis
-- set `VECTOR_STORE` to `qdrant`, `weaviate`, `milvus`, `chroma`, `opensearch`, `elasticsearch`, or `upstash` only when that external service is already available
-- set `STORAGE_TYPE=s3` plus the S3 variables for external object storage
-- keep `DIFY_ENABLE_SANDBOX=true` unless you deliberately want code execution features disabled
+- Dify is a heavier multi-service application. Plan for at least 2 CPU cores and 4 GiB RAM, with more memory for real workloads.
+- `/appdata` stores generated secrets, PostgreSQL data, Redis data, uploads, plugin daemon state, sandbox configuration, and local file storage.
+- Generated secrets are persisted under `/appdata/config/generated.env`. Changing `SECRET_KEY` after setup invalidates encrypted credentials and sessions.
+- The sandbox and SSRF proxy are included because they are part of the official self-hosted Dify topology. They reduce risk, but they do not make arbitrary code execution risk-free.
+- Public exposure should sit behind a trusted reverse proxy with TLS.
+- For serious deployments, back up `/appdata` and consider external PostgreSQL, Redis, and object storage when uptime or recovery matters.
 
-## Operational Caveats
+## Publishing and Releases
 
-Dify is not a tiny single-process app. The AIO wrapper trades operational simplicity for a heavier container with multiple supervised services inside it. For a serious deployment, use a reverse proxy with TLS, give the container enough memory, back up `/appdata`, and consider external PostgreSQL, Redis, and object storage when uptime or recovery matters.
+- Wrapper releases use the upstream version plus an AIO revision, such as `v1.11.0-aio.1`.
+- The repo monitors upstream releases and image digest changes through [upstream.toml](upstream.toml) and [scripts/check-upstream.py](scripts/check-upstream.py).
+- Release notes are generated with `git-cliff`.
+- The Unraid template `<Changes>` block is synced from `CHANGELOG.md` during release preparation.
+- `main` publishes `latest`, the pinned upstream version tag, an explicit AIO packaging line tag, and `sha-<commit>`.
+- The catalog XML should be synced into `awesome-unraid` only after the source template is finalized and validated here.
 
-The sandbox and SSRF proxy are included because they are part of the official self-hosted Dify topology. They reduce risk, but they do not make arbitrary code execution risk-free.
+See [docs/releases.md](docs/releases.md) for the release workflow details.
 
 ## Validation
 
-Local checks:
+Local validation is pytest-first:
 
-```sh
+```bash
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements-dev.txt
 python3 scripts/validate-template.py
+python3 scripts/generate_dify_template.py --check
 pytest tests/unit tests/template
 pytest tests/integration -m integration
 ```
 
-The integration test builds a Linux amd64 image and boots the full container stack, so it is intentionally more expensive than the unit and XML checks.
+The integration suite builds a Linux amd64 image and boots the full container stack, so it is intentionally more expensive than the unit and XML checks.
 
 Extended provider checks:
 
-```sh
+```bash
 pytest tests/integration -m extended_integration
 ```
 
-The extended suite is meant for deeper release or manual validation. It starts provider sidecars for external PostgreSQL plus Redis, Qdrant, MinIO-compatible S3 storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`. Storage and mail sidecars prove boot-time configuration and network reachability; SaaS-backed integrations still require app-level credentials and workflows for true end-to-end provider validation.
+The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, MinIO-compatible S3 storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
 
 The Unraid XML template is generated from `docs/upstream/dify.env.example` plus AIO-specific defaults. The generated XML is curated for Community Applications usability, while `rootfs/opt/dify-aio/upstream-env-vars.txt` still tracks the full upstream variable list for blank-value normalization and drift checks. When Dify updates its upstream environment surface, refresh the fixture, run `python3 scripts/generate_dify_template.py`, and then run validation.
 
-## Upstream
+## Support
 
-- Project: <https://github.com/langgenius/dify>
-- Self-hosted install docs: <https://docs.dify.ai/en/self-host/quick-start/docker-compose>
-- Release notes: <https://github.com/langgenius/dify/releases>
+- Repo issues: [JSONbored/dify-aio issues](https://github.com/JSONbored/dify-aio/issues)
+- Upstream app: [langgenius/dify](https://github.com/langgenius/dify)
+- Self-hosted install docs: [docs.dify.ai](https://docs.dify.ai/en/self-host/quick-start/docker-compose)
+- Release notes: [Dify releases](https://github.com/langgenius/dify/releases)
+
+## Funding
+
+If this work saves you time, support it here:
+
+- [GitHub Sponsors](https://github.com/sponsors/JSONbored)
+- [Ko-fi](https://ko-fi.com/jsonbored)
+- [Buy Me a Coffee](https://buymeacoffee.com/jsonbored)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=JSONbored/dify-aio&theme=dark)](https://star-history.com/#JSONbored/dify-aio&Date)
