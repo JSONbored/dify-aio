@@ -15,14 +15,24 @@ SECRET_KEYWORDS = (
     "ALLOWED_KEYS",
     "API_KEY",
     "AUTH_TOKEN",
+    "CONNECTION_STRING",
     "CLIENT_SECRET",
     "CREDENTIAL",
     "DSN",
     "KEY_ID",
     "PASSWORD",
     "PRIVATE_KEY",
+    "SERVICE_ACCOUNT",
     "SECRET",
     "TOKEN",
+)
+
+PLACEHOLDER_DEFAULT_MARKERS = (
+    "<your",
+    "example.com",
+    "example.test",
+    "your-",
+    "your_",
 )
 
 
@@ -114,6 +124,19 @@ def test_secret_like_template_variables_are_masked() -> None:
             )
 
 
+def test_template_does_not_select_placeholder_integration_values() -> None:
+    for config in _config_elements():
+        default = (config.get("Default") or "").lower()
+        selected = (config.text or "").strip().lower()
+        haystack = " ".join((default, selected))
+
+        assert not haystack.startswith("your")  # nosec B101
+        for marker in PLACEHOLDER_DEFAULT_MARKERS:
+            assert (
+                marker not in haystack
+            ), f"{config.get('Name') or config.get('Target')} includes placeholder value {marker!r}"  # nosec B101
+
+
 def test_required_appdata_paths_are_declared_as_container_volumes() -> None:
     volumes = _dockerfile_volumes()
     assert volumes, "Dockerfile must declare persistent volumes"  # nosec B101
@@ -161,7 +184,9 @@ def test_template_surface_is_curated_but_upstream_tracked() -> None:
     assert "S3_ENDPOINT" in config_targets  # nosec B101
     assert "SMTP_SERVER" in config_targets  # nosec B101
     assert "OTEL_EXPORTER_TYPE" in config_targets  # nosec B101
-    assert "SANDBOX_EXPIRED_RECORDS_CLEAN_TASK_LOCK_TTL" not in config_targets  # nosec B101
+    assert (
+        "SANDBOX_EXPIRED_RECORDS_CLEAN_TASK_LOCK_TTL" not in config_targets
+    )  # nosec B101
 
 
 def test_dockerfile_has_runtime_safety_contract() -> None:
