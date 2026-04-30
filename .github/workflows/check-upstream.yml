@@ -2,11 +2,8 @@ name: Check Upstream Version
 
 on:
   schedule:
-    - cron: 23 7 * * 1
+    - cron: "23 7 * * 1"
   workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: read
@@ -17,126 +14,14 @@ concurrency:
 
 jobs:
   check-upstream:
-    runs-on: ubuntu-latest
+    uses: JSONbored/aio-fleet/.github/workflows/aio-check-upstream.yml@70792816d19763170bb5cce255a970e7fa2d45cf
     permissions:
       contents: write
       pull-requests: write
       issues: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-
-      - name: Check upstream
-        id: upstream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          chmod +x scripts/check-upstream.py
-          ./scripts/check-upstream.py
-
-      - name: Stop if already current
-        if: ${{ steps.upstream.outputs.updates_available != 'true' }}
-        run: echo "Upstream is already current."
-
-      - name: Create update branch
-        if: ${{ steps.upstream.outputs.updates_available == 'true' && steps.upstream.outputs.strategy == 'pr' }}
-        run: git checkout -B "${{ steps.upstream.outputs.branch_name }}"
-
-      - name: Apply upstream version bump
-        if: ${{ steps.upstream.outputs.updates_available == 'true' && steps.upstream.outputs.strategy == 'pr' }}
-        env:
-          WRITE_UPSTREAM_VERSION: "true"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./scripts/check-upstream.py
-
-      - name: Commit upstream version bump
-        if: ${{ steps.upstream.outputs.updates_available == 'true' && steps.upstream.outputs.strategy == 'pr' }}
-        env:
-          PR_TITLE: ${{ steps.upstream.outputs.pr_title }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Dockerfile
-          git commit -m "${PR_TITLE}"
-
-      - name: Push update branch
-        if: ${{ steps.upstream.outputs.updates_available == 'true' && steps.upstream.outputs.strategy == 'pr' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH_NAME: ${{ steps.upstream.outputs.branch_name }}
-        run: git push --force --set-upstream origin "${BRANCH_NAME}"
-
-      - name: Open or update pull request
-        if: ${{ steps.upstream.outputs.updates_available == 'true' && steps.upstream.outputs.strategy == 'pr' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURRENT_VERSION: ${{ steps.upstream.outputs.current_version }}
-          LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
-          CURRENT_DIGEST: ${{ steps.upstream.outputs.current_digest }}
-          LATEST_DIGEST: ${{ steps.upstream.outputs.latest_digest }}
-          RELEASE_NOTES_URL: ${{ steps.upstream.outputs.release_notes_url }}
-          BRANCH_NAME: ${{ steps.upstream.outputs.branch_name }}
-          PR_TITLE: ${{ steps.upstream.outputs.pr_title }}
-          UPSTREAM_NAME: ${{ steps.upstream.outputs.upstream_name }}
-        run: |
-          body_file="$(mktemp)"
-          {
-            echo "${UPSTREAM_NAME} upstream has newer published artifacts."
-            echo
-            echo "- Current pinned upstream version: \`${CURRENT_VERSION}\`"
-            echo "- Latest upstream version: \`${LATEST_VERSION}\`"
-            if [[ -n "${CURRENT_DIGEST}" || -n "${LATEST_DIGEST}" ]]; then
-              echo "- Current pinned upstream digest: \`${CURRENT_DIGEST}\`"
-              echo "- Latest upstream digest: \`${LATEST_DIGEST}\`"
-            fi
-            echo "- Release notes: ${RELEASE_NOTES_URL}"
-            echo
-            echo "This PR was opened automatically by the upstream monitor workflow."
-          } > "${body_file}"
-
-          existing_pr="$(gh pr list --head "${BRANCH_NAME}" --base main --json number --jq '.[0].number')"
-          if [[ -n "${existing_pr}" ]]; then
-            gh pr edit "${existing_pr}" \
-              --title "${PR_TITLE}" \
-              --body-file "${body_file}"
-          else
-            gh pr create \
-              --base main \
-              --head "${BRANCH_NAME}" \
-              --title "${PR_TITLE}" \
-              --body-file "${body_file}"
-          fi
-
-      - name: Open or update notification issue
-        if: ${{ steps.upstream.outputs.updates_available == 'true' && steps.upstream.outputs.strategy == 'notify' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURRENT_VERSION: ${{ steps.upstream.outputs.current_version }}
-          LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
-          CURRENT_DIGEST: ${{ steps.upstream.outputs.current_digest }}
-          LATEST_DIGEST: ${{ steps.upstream.outputs.latest_digest }}
-          RELEASE_NOTES_URL: ${{ steps.upstream.outputs.release_notes_url }}
-          UPSTREAM_NAME: ${{ steps.upstream.outputs.upstream_name }}
-        run: |
-          issue_title="Upstream update available: ${LATEST_VERSION}"
-          body_file="$(mktemp)"
-          {
-            echo "${UPSTREAM_NAME} upstream has newer published artifacts available."
-            echo
-            echo "- Current pinned upstream version: \`${CURRENT_VERSION}\`"
-            echo "- Latest upstream version: \`${LATEST_VERSION}\`"
-            if [[ -n "${CURRENT_DIGEST}" || -n "${LATEST_DIGEST}" ]]; then
-              echo "- Current pinned upstream digest: \`${CURRENT_DIGEST}\`"
-              echo "- Latest upstream digest: \`${LATEST_DIGEST}\`"
-            fi
-            echo "- Release notes: ${RELEASE_NOTES_URL}"
-          } > "${body_file}"
-
-          existing_issue="$(gh issue list --state open --search "${issue_title} in:title" --json number --jq '.[0].number')"
-          if [[ -n "${existing_issue}" ]]; then
-            gh issue edit "${existing_issue}" --title "${issue_title}" --body-file "${body_file}"
-          else
-            gh issue create --title "${issue_title}" --body-file "${body_file}" --label enhancement
-          fi
+    with:
+      workflow_title: Check Upstream Version
+      component_matrix: '[""]'
+      commit_paths: |
+        Dockerfile
+    secrets: inherit
