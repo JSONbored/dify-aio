@@ -70,7 +70,7 @@ concurrency:
 
 jobs:
   aio-build:
-    uses: JSONbored/aio-fleet/.github/workflows/aio-build.yml@01163d070460034ea975df7b57d34b6178f33e97
+    uses: JSONbored/aio-fleet/.github/workflows/aio-build.yml@c4099c09cb2375a0f5a5a822a0f8af02a77d0526
     permissions:
       contents: read
       packages: write
@@ -93,7 +93,7 @@ jobs:
       extended_integration_pytest_args: tests/integration -m extended_integration
       generator_check_command: python3 scripts/generate_dify_template.py --check
       upstream_digest_arg: UPSTREAM_IMAGE_DIGEST
-      catalog_published: false
+      catalog_published: true
       xml_paths: |
         *.xml
         assets/**
