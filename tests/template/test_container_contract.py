@@ -137,6 +137,24 @@ def test_unraid_metadata_contract_is_complete_and_unprivileged() -> None:
     )  # nosec B101
 
 
+def test_overview_includes_beginner_and_power_user_guidance() -> None:
+    overview = _template_root().findtext("Overview") or ""
+
+    expected_fragments = [
+        "[b]All-In-One Unraid Edition[/b]",
+        "[b]Quick Install (Beginners)[/b]",
+        "[b]Power Users (Advanced View)[/b]",
+        "[b]Important Notes[/b]",
+        "[code]Web UI Port[/code]",
+        "[code]Public URL[/code]",
+        "[code]/appdata/config/generated.env[/code]",
+        "[code]/appdata/config/extra.env[/code]",
+        "[code]CHECK_UPDATE_URL[/code]",
+    ]
+    for fragment in expected_fragments:
+        assert fragment in overview  # nosec B101
+
+
 def test_only_install_critical_fields_are_required() -> None:
     required_configs = {
         config.get("Target"): config

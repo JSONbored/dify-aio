@@ -1,6 +1,7 @@
 #!/command/with-contenv bash
 # shellcheck shell=bash
 # shellcheck disable=SC2312
+# shellcheck disable=SC2154
 set -euo pipefail
 
 # shellcheck source=/dev/null

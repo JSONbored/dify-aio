@@ -9,7 +9,28 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/JSONbored/dify-aio/issues</Support>
   <Project>https://github.com/JSONbored/dify-aio</Project>
-  <Overview>Dify AIO packages the Dify self-hosted stack for Unraid in one practical container: API, workers, web UI, plugin daemon, code sandbox, SSRF proxy, Nginx, PostgreSQL with pgvector, and Redis. Leave the defaults in place for a first install, open the Web UI, and create the initial admin account. Secrets are generated on first boot under /appdata/config/generated.env. Advanced users can point Dify at external PostgreSQL, Redis, object storage, vector databases, SMTP, reverse proxy URLs, observability endpoints, and the broader upstream Dify environment surface.</Overview>
+  <Overview>Dify is a self-hosted AI application platform for agentic workflows, RAG pipelines, tools, model-provider integrations, and observability.&#xD;
+&#xD;
+[b]All-In-One Unraid Edition[/b]&#xD;
+`dify-aio` packages the Dify API, workers, web UI, plugin daemon, code sandbox, SSRF proxy, Nginx, PostgreSQL with pgvector, and Redis into one practical Unraid-first container.&#xD;
+&#xD;
+[b]Quick Install (Beginners)[/b]&#xD;
+1. Install this template and leave [code]Web UI Port[/code] and [code]AppData[/code] at their defaults unless you already have a port conflict.&#xD;
+2. Start the container and give first boot a few minutes. The wrapper initializes bundled PostgreSQL, pgvector, Redis, generated secrets, local storage, the sandbox, plugin daemon, and the Dify services.&#xD;
+3. Open the Web UI and create the first admin account. You can optionally set [code]Initial Admin Password[/code] before first boot, but it is not required.&#xD;
+4. Add model-provider credentials inside Dify first. For a reverse proxy or published apps, set [code]Public URL[/code] to your external HTTPS URL and restart.&#xD;
+5. Keep Advanced View defaults for the easiest install. The bundled database, cache, vector store, local file storage, sandbox, and SSRF proxy are already wired together.&#xD;
+&#xD;
+[b]Power Users (Advanced View)[/b]&#xD;
+- Advanced View exposes external PostgreSQL-compatible databases, Redis, object storage, vector databases, SMTP/mail, plugin storage, observability, CORS/CSP, sandbox, proxy, token expiry, indexing, cleanup, and broader upstream Dify environment controls.&#xD;
+- If you switch a backend selector such as [code]VECTOR_STORE[/code], [code]STORAGE_TYPE[/code], [code]DB_TYPE[/code], or internal service toggles, configure the matching companion fields for that backend.&#xD;
+- Blank secret fields generate and persist values in [code]/appdata/config/generated.env[/code]. Explicit Unraid template values override generated secrets, and [code]/appdata/config/extra.env[/code] remains the final advanced override escape hatch.&#xD;
+- [code]CHECK_UPDATE_URL[/code] is blank by default to avoid outbound update checks unless you intentionally opt in.&#xD;
+&#xD;
+[b]Important Notes[/b]&#xD;
+- Dify is a heavier multi-service stack. Plan for at least 2 CPU cores and 4 GiB RAM, with more memory for real indexing, workflow, or model-heavy workloads.&#xD;
+- Public exposure should sit behind a trusted reverse proxy with TLS. Review sandbox/network settings before allowing untrusted users to run code or tools.&#xD;
+- External vector stores, object storage, SMTP, and model providers are optional but real production deployments may need them.</Overview>
   <Changes>### 2026-04-30&#xD;
 - Generated from CHANGELOG.md during release preparation. Do not edit manually.&#xD;
 - Add Dify AIO repository by @JSONbored&#xD;
