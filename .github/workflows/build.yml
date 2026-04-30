@@ -213,6 +213,7 @@ jobs:
           PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/check-upstream.py
           PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/components.py
           PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/generate_dify_template.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/template_changes.py
           PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/validate-template.py
           PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/update-template-changes.py
           PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/release.py
