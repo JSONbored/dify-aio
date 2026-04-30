@@ -13,8 +13,10 @@
   <Changes>### 2026-04-30&#xD;
 - Generated from CHANGELOG.md during release preparation. Do not edit manually.&#xD;
 - Add Dify AIO repository by @JSONbored&#xD;
+- Keep generated template changes current by @JSONbored&#xD;
+- Tighten image publish gates by @JSONbored&#xD;
 - Initial commit by @JSONbored&#xD;
-- @JSONbored made their first contribution in [#1](https://github.com/JSONbored/dify-aio/pull/1)</Changes>
+- @JSONbored made their first contribution in [#4](https://github.com/JSONbored/dify-aio/pull/4)</Changes>
   <Category>AI Productivity Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/dify-aio.xml</TemplateURL>
