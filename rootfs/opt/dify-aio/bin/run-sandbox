@@ -12,8 +12,8 @@ export ENABLE_NETWORK="${SANDBOX_ENABLE_NETWORK}"
 export HTTP_PROXY="${SANDBOX_HTTP_PROXY}"
 export HTTPS_PROXY="${SANDBOX_HTTPS_PROXY}"
 export SANDBOX_PORT
-export PIP_MIRROR_URL="${PIP_MIRROR_URL:-}"
-export LD_LIBRARY_PATH="/opt/python/lib:${LD_LIBRARY_PATH:-}"
+export PIP_MIRROR_URL="${PIP_MIRROR_URL-}"
+export LD_LIBRARY_PATH="/opt/python/lib:${LD_LIBRARY_PATH-}"
 export PATH="/opt/socket/bin:/opt/python/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 node_dir="$(find /opt -maxdepth 1 -type d -name 'node-v*-linux-*' | sort | head -n1)"

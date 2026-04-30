@@ -43,9 +43,7 @@ done
 
 
 def _write_extra_env(container_name: str, values: dict[str, str]) -> None:
-    payload = "".join(
-        f"{key}={shlex.quote(value)}\n" for key, value in values.items()
-    )
+    payload = "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items())
     docker_exec(
         container_name,
         f"printf %s {shlex.quote(payload)} > /appdata/config/extra.env",
@@ -75,11 +73,16 @@ def test_external_postgres_and_redis_modes_boot_against_sidecars(
                 "pg_isready -U dify -d dify >/dev/null",
                 timeout=180,
             )
-            docker_exec(postgres, "createdb -U dify dify_plugin")
-            docker_exec(
+            wait_for_container_command(
+                postgres,
+                "createdb -U dify dify_plugin",
+                timeout=180,
+            )
+            wait_for_container_command(
                 postgres,
                 "psql -U dify -d dify -v ON_ERROR_STOP=1 "
                 "-c 'CREATE EXTENSION IF NOT EXISTS vector;'",
+                timeout=180,
             )
 
             with sidecar_container(
@@ -137,14 +140,14 @@ def test_external_postgres_and_redis_modes_boot_against_sidecars(
                     }
                     container.exec(
                         "bash -lc '. /opt/dify-aio/lib/env.sh; load_generated_env; "
-                        "configure_dify_env; PGPASSWORD=\"$DB_PASSWORD\" pg_isready "
-                        "-h \"$DB_HOST\" -p \"$DB_PORT\" -U \"$DB_USERNAME\" "
-                        "-d \"$DB_DATABASE\" >/dev/null'"
+                        'configure_dify_env; PGPASSWORD="$DB_PASSWORD" pg_isready '
+                        '-h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" '
+                        '-d "$DB_DATABASE" >/dev/null\''
                     )
                     container.exec(
                         "bash -lc '. /opt/dify-aio/lib/env.sh; load_generated_env; "
-                        "configure_dify_env; redis-cli -a \"$REDIS_PASSWORD\" "
-                        "-h \"$REDIS_HOST\" -p \"$REDIS_PORT\" ping | grep -q PONG'"
+                        'configure_dify_env; redis-cli -a "$REDIS_PASSWORD" '
+                        '-h "$REDIS_HOST" -p "$REDIS_PORT" ping | grep -q PONG\''
                     )
 
                     logs = container.logs()
@@ -217,7 +220,7 @@ def test_s3_storage_and_smtp_configuration_boot_against_sidecars(
             ports={minio_http_port: 9000},
             env={
                 "MINIO_ROOT_USER": "minioadmin",
-                "MINIO_ROOT_PASSWORD": "minioadmin",
+                "MINIO_ROOT_PASSWORD": "minioadmin",  # nosec B105 - local test fixture.
             },
             command_args=[
                 "server",
@@ -253,7 +256,7 @@ def test_s3_storage_and_smtp_configuration_boot_against_sidecars(
                         "S3_REGION": "us-east-1",
                         "S3_BUCKET_NAME": "dify-files",
                         "S3_ACCESS_KEY": "minioadmin",
-                        "S3_SECRET_KEY": "minioadmin",
+                        "S3_SECRET_KEY": "minioadmin",  # nosec B105 - local test fixture.
                         "S3_ADDRESS_STYLE": "path",
                         "MAIL_TYPE": "smtp",
                         "MAIL_DEFAULT_SEND_FROM": "noreply@example.test",
@@ -300,12 +303,15 @@ def test_extra_env_supports_common_optional_provider_surface(
     runtime: DockerRuntime,
 ) -> None:
     provider_env = {
+        "DEPLOY_ENV": "TESTING",
+        "LOG_LEVEL": "DEBUG",
+        "LOG_OUTPUT_FORMAT": "json",
         "STORAGE_TYPE": "s3",
         "S3_ENDPOINT": "http://minio:9000",
         "S3_REGION": "us-east-1",
         "S3_BUCKET_NAME": "dify-files",
         "S3_ACCESS_KEY": "dify-minio",
-        "S3_SECRET_KEY": "dify-minio-secret",
+        "S3_SECRET_KEY": "dify-minio-secret",  # nosec B105 - local test fixture.
         "S3_ADDRESS_STYLE": "path",
         "MAIL_TYPE": "smtp",
         "MAIL_DEFAULT_SEND_FROM": "noreply@example.test",
@@ -313,12 +319,16 @@ def test_extra_env_supports_common_optional_provider_surface(
         "SMTP_PORT": "1025",
         "SMTP_USE_TLS": "false",
         "SMTP_OPPORTUNISTIC_TLS": "false",
-        "PLUGIN_STORAGE_TYPE": "s3",
+        "SENDGRID_API_KEY": "sendgrid-secret",
+        "REDIS_SSL_CERT_REQS": "CERT_REQUIRED",
+        "ETL_TYPE": "Unstructured",
+        "WORKFLOW_NODE_EXECUTION_STORAGE": "hybrid",
+        "PLUGIN_STORAGE_TYPE": "aws_s3",
         "PLUGIN_STORAGE_OSS_BUCKET": "dify-plugin-files",
         "PLUGIN_S3_ENDPOINT": "http://minio:9000",
         "PLUGIN_S3_USE_PATH_STYLE": "true",
         "PLUGIN_AWS_ACCESS_KEY": "dify-plugin-minio",
-        "PLUGIN_AWS_SECRET_KEY": "dify-plugin-minio-secret",
+        "PLUGIN_AWS_SECRET_KEY": "dify-plugin-minio-secret",  # nosec B105 - local test fixture.
         "PLUGIN_AWS_REGION": "us-east-1",
         "VECTOR_STORE": "weaviate",
         "WEAVIATE_ENDPOINT": "http://weaviate:8080",
@@ -332,7 +342,7 @@ def test_extra_env_supports_common_optional_provider_surface(
         "ELASTICSEARCH_PORT": "9200",
         "UNSTRUCTURED_API_URL": "http://unstructured:8000/general/v0/general",
         "NOTION_INTEGRATION_TYPE": "internal",
-        "NOTION_INTERNAL_SECRET": "notion-internal-secret",
+        "NOTION_INTERNAL_SECRET": "notion-internal-secret",  # nosec B105 - local test fixture.
         "ENABLE_OTEL": "true",
         "OTLP_TRACE_ENDPOINT": "http://otel-collector:4318/v1/traces",
         "OTEL_EXPORTER_TYPE": "otlp",
@@ -345,4 +355,6 @@ def test_extra_env_supports_common_optional_provider_surface(
     with runtime.container() as container:
         container.wait_for_http(path="/", timeout=900)
         _write_extra_env(container.name, provider_env)
-        assert _configured_env(container.name, list(provider_env)) == provider_env  # nosec B101
+        assert (
+            _configured_env(container.name, list(provider_env)) == provider_env
+        )  # nosec B101

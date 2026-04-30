@@ -247,6 +247,7 @@ class DockerRuntime:
     def container(
         self,
         *,
+        appdata_volume: str | None = None,
         env_overrides: dict[str, str] | None = None,
         extra_args: list[str] | None = None,
         network: str | None = None,
@@ -254,7 +255,9 @@ class DockerRuntime:
         suffix = uuid.uuid4().hex[:10]
         name = f"dify-aio-pytest-{suffix}"
         http_port = reserve_host_port()
-        appdata_volume = create_docker_volume(f"{name}-appdata")
+        remove_appdata_volume = appdata_volume is None
+        if appdata_volume is None:
+            appdata_volume = create_docker_volume(f"{name}-appdata")
         try:
             command = [
                 "docker",
@@ -293,7 +296,8 @@ class DockerRuntime:
             finally:
                 self.remove(name)
         finally:
-            remove_docker_volume(appdata_volume)
+            if remove_appdata_volume:
+                remove_docker_volume(appdata_volume)
 
 
 class ContainerHandle:

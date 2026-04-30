@@ -30,6 +30,19 @@ def test_integration_and_publish_share_docker_cache_scope() -> None:
     )
 
 
+def test_publish_mirrors_tags_to_docker_hub_when_configured() -> None:
+    workflow = BUILD_WORKFLOW.read_text()
+
+    assert "Resolve Docker Hub publish settings" in workflow  # nosec B101
+    assert "Login to Docker Hub" in workflow  # nosec B101
+    assert "secrets.DOCKERHUB_USERNAME" in workflow  # nosec B101
+    assert "secrets.DOCKERHUB_TOKEN" in workflow  # nosec B101
+    assert "vars.DOCKERHUB_IMAGE_NAME" in workflow  # nosec B101
+    assert 'if [[ "${DOCKERHUB_ENABLED}" == "true" ]]; then' in workflow  # nosec B101
+    assert 'echo "${image_dockerhub}:latest"' in workflow  # nosec B101
+    assert 'echo "${image_dockerhub}:sha-${GITHUB_SHA}"' in workflow  # nosec B101
+
+
 def test_template_only_changes_do_not_run_integration_or_publish() -> None:
     workflow = BUILD_WORKFLOW.read_text()
 
@@ -65,4 +78,6 @@ def test_extended_integration_is_manual_and_uses_marker() -> None:
         "github.event_name == 'workflow_dispatch' && "
         "inputs.run_extended_integration == true"
     ) in workflow
-    assert "pytest-args: tests/integration -m extended_integration" in workflow  # nosec B101
+    assert (
+        "pytest-args: tests/integration -m extended_integration" in workflow
+    )  # nosec B101

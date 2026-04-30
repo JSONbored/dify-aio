@@ -20,7 +20,7 @@ This repository is pre-release. The source template, generated XML, and local co
 - SSRF proxy for sandboxed code execution
 - bundled PostgreSQL 15 with pgvector by default
 - bundled Redis by default
-- first-boot secret generation under `/appdata/config/generated.env`
+- first-boot secret generation under `/appdata/config/generated.env`, with explicit Unraid template values taking precedence
 - optional `/appdata/config/extra.env` escape hatch for rare upstream variables
 - Unraid CA source template at [dify-aio.xml](dify-aio.xml)
 
@@ -48,10 +48,10 @@ In Advanced View you can:
 - move Redis out of the container with `DIFY_USE_INTERNAL_REDIS=false` and external `REDIS_*` settings
 - select external vector stores such as Qdrant, Weaviate, Milvus, Chroma, OpenSearch, Elasticsearch, Upstash, and other upstream-supported backends
 - use local OpenDAL filesystem storage or configure S3-compatible object storage and other upstream storage providers
-- configure Resend or SMTP mail delivery
+- configure Resend, SMTP, or SendGrid mail delivery
 - configure sandbox, SSRF proxy, plugin daemon, marketplace, upload, datasource, Notion, Unstructured, Sentry, and OpenTelemetry settings
 - set `DIFY_AIO_PUBLIC_URL` for reverse-proxy deployments so Dify URL settings derive from one public base URL
-- put rare upstream-only variables in `/appdata/config/extra.env` instead of expanding the Unraid form with every possible knob
+- put rare upstream-only variables in `/appdata/config/extra.env` instead of expanding the Unraid form with every possible knob; the file is parsed as `KEY=value` data and is not shell-sourced
 
 Placeholder upstream defaults such as `your-bucket-name` are intentionally blanked in the CA template so external integrations fail closed until you provide real values.
 
@@ -59,7 +59,9 @@ Placeholder upstream defaults such as `your-bucket-name` are intentionally blank
 
 - Dify is a heavier multi-service application. Plan for at least 2 CPU cores and 4 GiB RAM, with more memory for real workloads.
 - `/appdata` stores generated secrets, PostgreSQL data, Redis data, uploads, plugin daemon state, sandbox configuration, and local file storage.
-- Generated secrets are persisted under `/appdata/config/generated.env`. Changing `SECRET_KEY` after setup invalidates encrypted credentials and sessions.
+- Generated secrets are persisted under `/appdata/config/generated.env`. If a masked secret field is left blank, the container generates and reuses a value; if you set a value in the Unraid template, that explicit value takes precedence. `/appdata/config/extra.env` is parsed last as an advanced override file.
+- `CHECK_UPDATE_URL` is blank by default to avoid outbound update checks from privacy-focused or offline installs. Set it explicitly if you want Dify to check an update endpoint.
+- Changing `SECRET_KEY` after setup invalidates encrypted credentials and sessions.
 - The sandbox and SSRF proxy are included because they are part of the official self-hosted Dify topology. They reduce risk, but they do not make arbitrary code execution risk-free.
 - Public exposure should sit behind a trusted reverse proxy with TLS.
 - For serious deployments, back up `/appdata` and consider external PostgreSQL, Redis, and object storage when uptime or recovery matters.
@@ -71,6 +73,7 @@ Placeholder upstream defaults such as `your-bucket-name` are intentionally blank
 - Release notes are generated with `git-cliff`.
 - The Unraid template `<Changes>` block is synced from `CHANGELOG.md` during release preparation.
 - `main` publishes `latest`, the pinned upstream version tag, an explicit AIO packaging line tag, and `sha-<commit>`.
+- When Docker Hub credentials are configured, the same publish flow pushes Docker Hub tags in parallel with GHCR so the CA template can use Docker Hub metadata and download counts.
 - The catalog XML should be synced into `awesome-unraid` only after the source template is finalized and validated here.
 
 See [docs/releases.md](docs/releases.md) for the release workflow details.
@@ -97,7 +100,7 @@ Extended provider checks:
 pytest tests/integration -m extended_integration
 ```
 
-The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, MinIO-compatible S3 storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
+The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, MinIO-compatible S3 storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, SendGrid, workflow execution storage, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
 
 The Unraid XML template is generated from `docs/upstream/dify.env.example` plus AIO-specific defaults. The generated XML is curated for Community Applications usability, while `rootfs/opt/dify-aio/upstream-env-vars.txt` still tracks the full upstream variable list for blank-value normalization and drift checks. When Dify updates its upstream environment surface, refresh the fixture, run `python3 scripts/generate_dify_template.py`, and then run validation.
 

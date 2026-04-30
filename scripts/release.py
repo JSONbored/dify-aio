@@ -140,7 +140,9 @@ def latest_changelog_version(changelog: pathlib.Path = DEFAULT_CHANGELOG) -> str
     raise SystemExit(f"Unable to find a released version heading in {changelog}")
 
 
-def extract_release_notes(version: str, changelog: pathlib.Path = DEFAULT_CHANGELOG) -> str:
+def extract_release_notes(
+    version: str, changelog: pathlib.Path = DEFAULT_CHANGELOG
+) -> str:
     heading = re.compile(
         rf"^##\s+(?:\[{re.escape(version)}\]\([^)]+\)|{re.escape(version)})(?:\s+-\s+.+)?$"
     )

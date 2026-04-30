@@ -36,6 +36,8 @@ LEGACY_CHANGELOG_MARKERS = (
 REQUIRED_TEXT_FIELDS = (
     "Support",
     "Project",
+    "Registry",
+    "ReadMe",
     "Overview",
     "Category",
     "TemplateURL",
@@ -51,8 +53,10 @@ REQUIRED_DIFY_TARGETS = {
     "DIFY_AIO_PUBLIC_URL",
     "DIFY_AIO_WAIT_TIMEOUT_SECONDS",
     "DIFY_ENABLE_SANDBOX",
+    "DIFY_BIND_ADDRESS",
     "DIFY_WEB_HOST",
     "DIFY_WEB_PORT",
+    "DEPLOY_ENV",
     "DIFY_USE_INTERNAL_POSTGRES",
     "DIFY_USE_INTERNAL_REDIS",
     "NEXT_TELEMETRY_DISABLED",
@@ -61,8 +65,12 @@ REQUIRED_DIFY_TARGETS = {
     "PLUGIN_DEBUGGING_PORT",
     "PLUGIN_MAX_PACKAGE_SIZE",
     "PLUGIN_PLATFORM",
+    "SENDGRID_API_KEY",
     "TZ",
+    "WORKFLOW_NODE_EXECUTION_STORAGE",
 }
+
+DIFY_CATEGORY_TOKENS = {"AI", "Productivity", "Tools:Utilities"}
 
 
 def resolve_template_path() -> Path:
@@ -202,6 +210,26 @@ def validate_template(xml_path: Path) -> int:
         return 1
 
     if xml_path.name == "dify-aio.xml":
+        category = (root.findtext("Category") or "").strip()
+        category_tokens = set(category.split())
+        if category_tokens != DIFY_CATEGORY_TOKENS or any(
+            token.endswith(":") for token in category_tokens
+        ):
+            return fail(
+                f"{xml_path.name} Category should be 'AI Productivity Tools:Utilities'"
+            )
+
+        repository = (root.findtext("Repository") or "").strip()
+        registry = (root.findtext("Registry") or "").strip()
+        if repository != "jsonbored/dify-aio:latest":
+            return fail(
+                f"{xml_path.name} Repository should point at the Docker Hub CA image"
+            )
+        if registry != "https://hub.docker.com/r/jsonbored/dify-aio":
+            return fail(
+                f"{xml_path.name} Registry should point at the Docker Hub repository"
+            )
+
         coverage_status = validate_dify_env_surface(root)
         if coverage_status:
             return coverage_status
@@ -253,7 +281,9 @@ def validate_dify_env_surface(root: ET.Element) -> int:
         return 1
 
     if not UPSTREAM_ENV_VARS_PATH.exists():
-        return fail(f"Missing generated upstream env-var list: {UPSTREAM_ENV_VARS_PATH}")
+        return fail(
+            f"Missing generated upstream env-var list: {UPSTREAM_ENV_VARS_PATH}"
+        )
 
     actual_env_vars = [
         line.strip()
@@ -272,7 +302,10 @@ def validate_dify_env_surface(root: ET.Element) -> int:
         for target in sorted(actual_set - expected_set):
             print(f"  - stale in env-var list: {target}", file=sys.stderr)
         if expected_set == actual_set:
-            print("  - env-var list order differs from the upstream fixture", file=sys.stderr)
+            print(
+                "  - env-var list order differs from the upstream fixture",
+                file=sys.stderr,
+            )
         return 1
 
     try:

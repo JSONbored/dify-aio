@@ -43,6 +43,7 @@ on:
       - components/**
       - renovate.json
       - .github/workflows/**
+  # checkov:skip=CKV_GHA_7: Manual dispatch input only controls the optional extended integration matrix.
   workflow_dispatch:
     inputs:
       run_extended_integration:
@@ -473,11 +474,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve Docker Hub publish settings
+        id: dockerhub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE_NAME }}
+          DOCKERHUB_IMAGE_NAME_SECRET: ${{ secrets.DOCKERHUB_IMAGE_NAME }}
+        run: |
+          if [[ -n "${DOCKERHUB_USERNAME}" && -n "${DOCKERHUB_TOKEN}" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          resolved_image_name="${DOCKERHUB_IMAGE_NAME:-${DOCKERHUB_IMAGE_NAME_SECRET}}"
+          if [[ -n "${resolved_image_name}" ]]; then
+            echo "image_name=${resolved_image_name}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "image_name=${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Login to Docker Hub
+        if: ${{ steps.dockerhub.outputs.enabled == 'true' }}
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Compute image tags
         id: prep
+        env:
+          DOCKERHUB_ENABLED: ${{ steps.dockerhub.outputs.enabled }}
+          DOCKERHUB_IMAGE_NAME: ${{ steps.dockerhub.outputs.image_name }}
         run: |
-          image="$(printf '%s' "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
-          sha_tag="${image}:sha-${GITHUB_SHA}"
+          image_ghcr="$(printf '%s' "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
+          dockerhub_image_name="${DOCKERHUB_IMAGE_NAME:-${IMAGE_NAME}}"
+          image_dockerhub="$(printf '%s' "${dockerhub_image_name}" | tr '[:upper:]' '[:lower:]')"
+          sha_tag_ghcr="${image_ghcr}:sha-${GITHUB_SHA}"
           upstream_version="$(python3 scripts/release.py upstream-version)"
           upstream_api_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_API_DIGEST=//p' Dockerfile | head -n1)"
           upstream_web_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_WEB_DIGEST=//p' Dockerfile | head -n1)"
@@ -514,12 +549,21 @@ jobs:
             echo "version_label=${version_label}"
             echo "wrapper_track=${wrapper_track}"
             echo "tags<<EOF"
-            echo "${image}:latest"
-            echo "${image}:${upstream_version}"
+            echo "${image_ghcr}:latest"
+            echo "${image_ghcr}:${upstream_version}"
             if [[ -n "${release_package_tag}" ]]; then
-              echo "${image}:${release_package_tag}"
+              echo "${image_ghcr}:${release_package_tag}"
             fi
-            echo "${sha_tag}"
+            echo "${sha_tag_ghcr}"
+
+            if [[ "${DOCKERHUB_ENABLED}" == "true" ]]; then
+              echo "${image_dockerhub}:latest"
+              echo "${image_dockerhub}:${upstream_version}"
+              if [[ -n "${release_package_tag}" ]]; then
+                echo "${image_dockerhub}:${release_package_tag}"
+              fi
+              echo "${image_dockerhub}:sha-${GITHUB_SHA}"
+            fi
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 

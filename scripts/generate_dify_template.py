@@ -6,7 +6,9 @@ import re
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import (  # nosec B406 - used only for XML escaping, not parsing.
+    escape,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = ROOT / "dify-aio.xml"
@@ -39,6 +41,9 @@ PLACEHOLDER_DEFAULT_MARKERS = (
     "<your",
     "example.com",
     "example.test",
+    "xxx-",
+    "xxx.",
+    "xxx_",
     "your-",
     "your_",
 )
@@ -54,6 +59,19 @@ URL_PUBLIC_TARGETS = {
     "SERVICE_API_URL",
     "TRIGGER_URL",
 }
+
+BLANK_DEFAULT_TARGETS = {
+    "CHECK_UPDATE_URL",
+}
+
+EXTERNAL_ENDPOINT_SUFFIXES = (
+    "_CONNECTION_STRING",
+    "_DSN",
+    "_ENDPOINT",
+    "_HOST",
+    "_HOSTS",
+    "_URL",
+)
 
 INTERNAL_SERVICE_TARGETS = {
     "CELERY_BROKER_URL",
@@ -80,49 +98,118 @@ INTERNAL_SERVICE_TARGETS = {
     "VECTOR_STORE",
 }
 
+NON_SECRET_TARGETS = {
+    "ACCESS_TOKEN_EXPIRE_MINUTES",
+    "CHANGE_EMAIL_TOKEN_EXPIRY_MINUTES",
+    "CODE_GENERATION_MAX_TOKENS",
+    "EMAIL_REGISTER_TOKEN_EXPIRY_MINUTES",
+    "HOLOGRES_TOKENIZER",
+    "INDEXING_MAX_SEGMENTATION_TOKENS_LENGTH",
+    "OWNER_TRANSFER_TOKEN_EXPIRY_MINUTES",
+    "PROMPT_GENERATION_MAX_TOKENS",
+    "REFRESH_TOKEN_EXPIRE_DAYS",
+    "RESET_PASSWORD_TOKEN_EXPIRY_MINUTES",
+    "WEAVIATE_TOKENIZATION",
+}
+
+ENUM_DEFAULTS = {
+    "DEPLOY_ENV": ("PRODUCTION", "TESTING"),
+    "DB_TYPE": ("postgresql", "mysql", "oceanbase", "seekdb"),
+    "ETL_TYPE": ("dify", "Unstructured"),
+    "LOG_LEVEL": ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+    "LOG_OUTPUT_FORMAT": ("text", "json"),
+    "MAIL_TYPE": ("resend", "smtp", "sendgrid"),
+    "PLUGIN_STORAGE_TYPE": (
+        "local",
+        "aws_s3",
+        "tencent_cos",
+        "azure_blob",
+        "aliyun_oss",
+        "volcengine_tos",
+    ),
+    "REDIS_SSL_CERT_REQS": ("CERT_NONE", "CERT_OPTIONAL", "CERT_REQUIRED"),
+    "WORKFLOW_NODE_EXECUTION_STORAGE": ("rdbms", "hybrid"),
+}
+
 CURATED_UPSTREAM_PREFIXES = (
     "ACCESS_TOKEN",
+    "ALIBABACLOUD_MYSQL",
     "ALIYUN_OSS",
+    "ALLOW_",
+    "ANALYTICDB",
     "API_TOOL",
     "APP_",
     "ARCHIVE_STORAGE",
     "ATTACHMENT",
     "AZURE_BLOB",
+    "BAIDU_OBS",
+    "BAIDU_VECTOR_DB",
+    "BROKER",
     "CELERY",
+    "CHANGE_EMAIL",
+    "CHECK_UPDATE",
     "CHROMA",
     "CODE_EXECUTION",
+    "CODE_GENERATION",
     "CONSOLE_CORS",
+    "COUCHBASE",
     "COOKIE",
+    "CLICKZETTA",
+    "CSP",
+    "DATASET_MAX",
     "DEBUG",
     "ELASTICSEARCH",
+    "EMAIL_REGISTER",
     "ENABLE_COLLABORATION",
+    "ENABLE_CLEAN",
+    "ENABLE_HUMAN_INPUT",
+    "ENABLE_MAIL_CLEAN",
     "ENABLE_REQUEST",
     "ENABLE_WEBSITE",
+    "ENABLE_WORKFLOW",
     "ETL",
     "FILES_ACCESS",
     "FLASK",
     "GOOGLE_STORAGE",
+    "HOLOGRES",
     "HTTP_REQUEST_NODE",
+    "HTTP_REQUEST_MAX",
     "HUAWEI_OBS",
+    "HUAWEI_CLOUD",
+    "HUMAN_INPUT",
+    "INDEXING",
+    "INVITE",
+    "IRIS",
+    "LINDORM",
     "LOG",
     "MAIL",
+    "MATRIXONE",
     "MIGRATION",
     "MILVUS",
     "MULTIMODAL",
     "MYSQL",
+    "MYSCALE",
     "NEXT_PUBLIC",
     "NOTION",
+    "OCI",
     "OPENAI_API_BASE",
     "OPENSEARCH",
+    "OPENGAUSS",
+    "ORACLE",
     "OTEL",
+    "OWNER_TRANSFER",
     "PGVECTOR",
+    "PGVECTO_RS",
     "PLUGIN",
     "POSITION",
     "POSTGRES",
+    "PROMPT_GENERATION",
     "QDRANT",
     "REDIS",
     "REFRESH_TOKEN",
+    "RELYT",
     "RESEND",
+    "RESET_PASSWORD",
     "S3",
     "SANDBOX",
     "SENTRY",
@@ -131,16 +218,22 @@ CURATED_UPSTREAM_PREFIXES = (
     "SSRF",
     "STORAGE_TYPE",
     "SUPABASE",
+    "TABLESTORE",
     "TENCENT_COS",
+    "TENCENT_VECTOR_DB",
+    "TEXT_GENERATION",
     "TIDB_ON_QDRANT",
     "TIDB_VECTOR",
     "UNSTRUCTURED",
     "UPLOAD",
     "UPSTASH",
     "VECTOR",
+    "VASTBASE",
+    "VIKINGDB",
     "VOLCENGINE_TOS",
     "WEB_API",
     "WEAVIATE",
+    "WORKFLOW",
 )
 
 CURATED_UPSTREAM_EXCLUDED_PREFIXES = (
@@ -168,7 +261,6 @@ CURATED_UPSTREAM_EXCLUDED_PREFIXES = (
     "PLUGIN_STDIO",
     "PLUGIN_STORAGE_LOCAL_ROOT",
     "PLUGIN_WORKING_PATH",
-    "SANDBOX_EXPIRED",
     "SSRF_COREDUMP",
     "TIDB_API_URL",
     "TIDB_IAM_API_URL",
@@ -205,6 +297,7 @@ class Config:
 
 def clean_description(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
+    text = text.replace("alibabcloud_mysql", "alibabacloud_mysql")
     if not text:
         return ""
     return textwrap.shorten(text, width=280, placeholder="...")
@@ -239,6 +332,8 @@ def parse_upstream_env(path: Path) -> list[tuple[str, str, str]]:
 
 def is_secret_target(target: str) -> bool:
     upper = target.upper()
+    if upper in NON_SECRET_TARGETS:
+        return False
     if upper.endswith("_PATH") or upper.endswith("_URL") or upper.endswith("_HOST"):
         return False
     return any(keyword in upper for keyword in SECRET_KEYWORDS)
@@ -261,15 +356,27 @@ def is_curated_upstream_target(target: str) -> bool:
     )
 
 
+def should_blank_default(target: str) -> bool:
+    return (
+        target in BLANK_DEFAULT_TARGETS
+        or target in URL_PUBLIC_TARGETS
+        or target in INTERNAL_SERVICE_TARGETS
+        or target.endswith(EXTERNAL_ENDPOINT_SUFFIXES)
+    )
+
+
 def selected_default_for(target: str, default: str) -> tuple[str, str]:
     if is_secret_target(target):
         return "", ""
     if is_placeholder_default(default):
         return "", ""
-    if target in URL_PUBLIC_TARGETS:
+    if should_blank_default(target):
         return "", ""
-    if target in INTERNAL_SERVICE_TARGETS:
-        return "", ""
+
+    if target in ENUM_DEFAULTS:
+        options = ENUM_DEFAULTS[target]
+        selected = default if default in options else options[0]
+        return "|".join(options), selected
 
     lowered = default.lower()
     if lowered == "true":
@@ -364,6 +471,19 @@ def core_configs() -> list[Config]:
             selected="UTC",
         ),
         Config(
+            "Deploy Environment",
+            "DEPLOY_ENV",
+            "PRODUCTION|TESTING",
+            "Dify deployment environment mode. Keep PRODUCTION for normal Unraid installs.",
+            selected="PRODUCTION",
+        ),
+        Config(
+            "Dify Update Check URL",
+            "CHECK_UPDATE_URL",
+            "",
+            "Optional Dify update-check endpoint. Leave blank to disable outbound update checks for privacy-focused or offline installs.",
+        ),
+        Config(
             "Secret Key",
             "SECRET_KEY",
             "",
@@ -375,15 +495,13 @@ def core_configs() -> list[Config]:
             "DIFY_USE_INTERNAL_POSTGRES",
             "true|false",
             "Use the bundled PostgreSQL 15 database with pgvector. Set false only when using an external PostgreSQL-compatible database.",
-            required=True,
             selected="true",
         ),
         Config(
             "Database Type",
             "DB_TYPE",
-            "postgresql",
-            "Database type used by Dify. The bundled AIO database is PostgreSQL.",
-            required=True,
+            "postgresql|mysql|oceanbase|seekdb",
+            "Database type used by Dify. The bundled AIO database is PostgreSQL; non-PostgreSQL modes require external infrastructure.",
             selected="postgresql",
         ),
         Config(
@@ -391,7 +509,6 @@ def core_configs() -> list[Config]:
             "DB_HOST",
             "127.0.0.1",
             "PostgreSQL host. Keep 127.0.0.1 for bundled PostgreSQL.",
-            required=True,
             selected="127.0.0.1",
         ),
         Config(
@@ -399,7 +516,6 @@ def core_configs() -> list[Config]:
             "DB_PORT",
             "5432",
             "PostgreSQL port.",
-            required=True,
             selected="5432",
         ),
         Config(
@@ -407,7 +523,6 @@ def core_configs() -> list[Config]:
             "DB_USERNAME",
             "dify",
             "PostgreSQL user for Dify.",
-            required=True,
             selected="dify",
         ),
         Config(
@@ -422,7 +537,6 @@ def core_configs() -> list[Config]:
             "DB_DATABASE",
             "dify",
             "PostgreSQL database used by the Dify API.",
-            required=True,
             selected="dify",
         ),
         Config(
@@ -430,7 +544,6 @@ def core_configs() -> list[Config]:
             "DB_PLUGIN_DATABASE",
             "dify_plugin",
             "PostgreSQL database used by the Dify plugin daemon.",
-            required=True,
             selected="dify_plugin",
         ),
         Config(
@@ -438,7 +551,6 @@ def core_configs() -> list[Config]:
             "DIFY_USE_INTERNAL_REDIS",
             "true|false",
             "Use the bundled Redis instance. Set false only when using an external Redis service.",
-            required=True,
             selected="true",
         ),
         Config(
@@ -446,7 +558,6 @@ def core_configs() -> list[Config]:
             "REDIS_HOST",
             "127.0.0.1",
             "Redis host. Keep 127.0.0.1 for bundled Redis.",
-            required=True,
             selected="127.0.0.1",
         ),
         Config(
@@ -454,7 +565,6 @@ def core_configs() -> list[Config]:
             "REDIS_PORT",
             "6379",
             "Redis port.",
-            required=True,
             selected="6379",
         ),
         Config(
@@ -537,6 +647,13 @@ def core_configs() -> list[Config]:
             "Optional Dify log timezone. Leave blank to inherit TZ.",
         ),
         Config(
+            "API Bind Address",
+            "DIFY_BIND_ADDRESS",
+            "127.0.0.1",
+            "Internal Dify API bind address. Keep localhost so only the bundled Nginx gateway is exposed.",
+            selected="127.0.0.1",
+        ),
+        Config(
             "Server Workers",
             "SERVER_WORKER_AMOUNT",
             "1",
@@ -576,7 +693,6 @@ def core_configs() -> list[Config]:
             "VECTOR_STORE",
             "pgvector|weaviate|qdrant|milvus|myscale|relyt|pgvecto-rs|chroma|opensearch|oracle|tencent|elasticsearch|elasticsearch-ja|analyticdb|couchbase|vikingdb|opengauss|tablestore|vastbase|tidb|tidb_on_qdrant|baidu|lindorm|huawei_cloud|upstash|matrixone|clickzetta|alibabacloud_mysql|iris|hologres",
             "Dify vector database backend. The default uses bundled PostgreSQL with pgvector. Non-pgvector choices require external services and matching variables.",
-            required=True,
             selected="pgvector",
         ),
         Config(
@@ -645,9 +761,8 @@ def core_configs() -> list[Config]:
         Config(
             "Storage Type",
             "STORAGE_TYPE",
-            "opendal|s3|azure-blob|google-storage|aliyun-oss|tencent-cos|huawei-obs|volcengine-tos|supabase",
+            "opendal|s3|azure-blob|google-storage|aliyun-oss|tencent-cos|huawei-obs|oci-storage|volcengine-tos|baidu-obs|supabase|clickzetta-volume",
             "Dify file storage backend. The default uses local OpenDAL filesystem storage under AppData.",
-            required=True,
             selected="opendal",
         ),
         Config(
@@ -680,7 +795,6 @@ def core_configs() -> list[Config]:
             "DIFY_ENABLE_SANDBOX",
             "true|false",
             "Run the bundled Dify sandbox used for code execution. Disabling it breaks code-execution features.",
-            required=True,
             selected="true",
         ),
         Config(
@@ -708,7 +822,6 @@ def core_configs() -> list[Config]:
             "SANDBOX_ENABLE_NETWORK",
             "true|false",
             "Allow sandboxed code to access the network through the bundled SSRF proxy.",
-            required=True,
             selected="true",
         ),
         Config(
@@ -791,7 +904,6 @@ def core_configs() -> list[Config]:
             "FORCE_VERIFYING_SIGNATURE",
             "true|false",
             "Require signed plugins where Dify supports signature verification.",
-            required=True,
             selected="true",
         ),
         Config(
@@ -799,13 +911,12 @@ def core_configs() -> list[Config]:
             "MARKETPLACE_ENABLED",
             "true|false",
             "Enable the Dify plugin marketplace integration.",
-            required=True,
             selected="true",
         ),
         Config(
             "Mail Type",
             "MAIL_TYPE",
-            "resend|smtp",
+            "resend|smtp|sendgrid",
             "Mail provider used by Dify.",
             selected="resend",
         ),
@@ -814,6 +925,13 @@ def core_configs() -> list[Config]:
             "RESEND_API_KEY",
             "",
             "Resend API key when Mail Type is resend.",
+            mask=True,
+        ),
+        Config(
+            "SendGrid API Key",
+            "SENDGRID_API_KEY",
+            "",
+            "SendGrid API key when Mail Type is sendgrid.",
             mask=True,
         ),
         Config("SMTP Server", "SMTP_SERVER", "", "SMTP host when Mail Type is smtp."),
@@ -866,7 +984,6 @@ def core_configs() -> list[Config]:
             "ENABLE_WEBSITE_FIRECRAWL",
             "true|false",
             "Expose Firecrawl as a Dify website datasource option. Configure Firecrawl credentials inside Dify where required.",
-            required=True,
             selected="true",
         ),
         Config(
@@ -874,7 +991,6 @@ def core_configs() -> list[Config]:
             "ENABLE_WEBSITE_JINAREADER",
             "true|false",
             "Expose Jina Reader as a Dify website datasource option.",
-            required=True,
             selected="true",
         ),
         Config(
@@ -882,8 +998,14 @@ def core_configs() -> list[Config]:
             "ENABLE_WEBSITE_WATERCRAWL",
             "true|false",
             "Expose WaterCrawl as a Dify website datasource option.",
-            required=True,
             selected="true",
+        ),
+        Config(
+            "Workflow Execution Storage",
+            "WORKFLOW_NODE_EXECUTION_STORAGE",
+            "rdbms|hybrid",
+            "Storage backend for workflow node execution records. Keep rdbms for the default AIO database path.",
+            selected="rdbms",
         ),
         Config(
             "AIO Wait Timeout Seconds",
@@ -921,9 +1043,9 @@ def core_configs() -> list[Config]:
         Config(
             "Dify Web Host",
             "DIFY_WEB_HOST",
-            "0.0.0.0",
-            "Internal Dify web service bind host.",
-            selected="0.0.0.0",
+            "127.0.0.1",
+            "Internal Dify web service bind host. Keep localhost so only the bundled Nginx gateway is exposed.",
+            selected="127.0.0.1",
         ),
         Config(
             "Plugin Platform",
@@ -935,9 +1057,9 @@ def core_configs() -> list[Config]:
         Config(
             "Plugin Remote Installing Host",
             "PLUGIN_DEBUGGING_HOST",
-            "0.0.0.0",
-            "Plugin remote-install/debug host used by the plugin daemon.",
-            selected="0.0.0.0",
+            "127.0.0.1",
+            "Plugin remote-install/debug host used by the plugin daemon. Keep localhost unless you intentionally expose plugin debugging.",
+            selected="127.0.0.1",
         ),
         Config(
             "Plugin Remote Installing Port",
@@ -1023,8 +1145,8 @@ def render_template(configs: list[Config]) -> str:
     return f"""<?xml version="1.0"?>
 <Container version="2">
   <Name>dify-aio</Name>
-  <Repository>ghcr.io/jsonbored/dify-aio:latest</Repository>
-  <Registry>https://ghcr.io/jsonbored/dify-aio</Registry>
+  <Repository>jsonbored/dify-aio:latest</Repository>
+  <Registry>https://hub.docker.com/r/jsonbored/dify-aio</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>
@@ -1037,9 +1159,10 @@ def render_template(configs: list[Config]) -> str:
 - Scaffold Dify AIO from the current Unraid AIO template.&#xD;
 - Bundle Dify API, web, worker, beat, sandbox, plugin daemon, PostgreSQL/pgvector, Redis, Nginx, and SSRF proxy defaults.&#xD;
 </Changes>
-  <Category>AI: Productivity: Tools:Utilities</Category>
+  <Category>AI Productivity Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/dify-aio.xml</TemplateURL>
+  <ReadMe>https://github.com/JSONbored/dify-aio#readme</ReadMe>
   <Icon>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/icons/dify.png</Icon>
   <ExtraSearchTerms>ai agent workflow llm rag chatbot mcp openai anthropic ollama app builder knowledge base</ExtraSearchTerms>
   <Requires>Dify is a heavier multi-service application. Plan for at least 2 CPU cores and 4 GiB RAM, with more memory for real workloads. Public exposure should be placed behind a trusted reverse proxy with TLS. Model-provider API keys, SMTP, object storage, and external vector stores are optional but may be required for production use.</Requires>

@@ -20,7 +20,21 @@ PGUSER="${DB_USERNAME}"
 PGPASS="${DB_PASSWORD}"
 PGDB="${DB_DATABASE}"
 PLUGIN_DB="${DB_PLUGIN_DATABASE}"
+PGUSER_SQL="${PGUSER//\'/\'\'}"
 PGPASS_SQL="${PGPASS//\'/\'\'}"
+
+validate_pg_identifier() {
+	local label="$1"
+	local value="$2"
+	if [[ ! ${value} =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]; then
+		aio_log "Invalid bundled PostgreSQL ${label}: ${value}. Use letters, numbers, and underscores; the first character must be a letter or underscore."
+		exit 1
+	fi
+}
+
+validate_pg_identifier "user" "${PGUSER}"
+validate_pg_identifier "database" "${PGDB}"
+validate_pg_identifier "plugin database" "${PLUGIN_DB}"
 
 mkdir -p "${PGDATA}" /run/postgresql
 chown -R postgres:postgres "${PGDATA}" /run/postgresql
@@ -35,7 +49,21 @@ if ! su postgres -s /bin/sh -c "\"${PG_BIN}/pg_ctl\" -D \"${PGDATA}\" status" >/
 	su postgres -s /bin/sh -c "\"${PG_BIN}/pg_ctl\" -D \"${PGDATA}\" -w start >/dev/null"
 fi
 
-su postgres -s /bin/sh -c "psql -v ON_ERROR_STOP=1 -c \"DO \\\$\\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${PGUSER}') THEN CREATE ROLE ${PGUSER} LOGIN PASSWORD '${PGPASS_SQL}'; ELSE ALTER ROLE ${PGUSER} WITH LOGIN PASSWORD '${PGPASS_SQL}'; END IF; END \\\$\\\$;\" >/dev/null"
+role_sql="$(mktemp)"
+trap 'rm -f "${role_sql}"' EXIT
+cat >"${role_sql}" <<SQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${PGUSER_SQL}') THEN
+    CREATE ROLE "${PGUSER}" LOGIN PASSWORD '${PGPASS_SQL}';
+  ELSE
+    ALTER ROLE "${PGUSER}" WITH LOGIN PASSWORD '${PGPASS_SQL}';
+  END IF;
+END
+\$\$;
+SQL
+chown postgres:postgres "${role_sql}"
+su postgres -s /bin/sh -c "psql -v ON_ERROR_STOP=1 -f \"${role_sql}\" >/dev/null"
 
 for database in "${PGDB}" "${PLUGIN_DB}"; do
 	su postgres -s /bin/sh -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='${database}'\" | grep -q 1" ||

@@ -2,7 +2,6 @@
 # shellcheck shell=bash
 
 AIO_TRUE_VALUES="1 true TRUE yes YES on ON"
-AIO_FALSE_VALUES="0 false FALSE no NO off OFF"
 AIO_APPDATA_DIR="/appdata"
 AIO_CONFIG_DIR="${AIO_APPDATA_DIR}/config"
 AIO_ENV_FILE="${AIO_CONFIG_DIR}/generated.env"
@@ -45,14 +44,27 @@ AIO_BLANK_AS_UNSET_VARS=(
 	UNSTRUCTURED_API_URL
 )
 
+AIO_BLANK_IS_MEANINGFUL_VARS=(
+	CHECK_UPDATE_URL
+)
+
 aio_log() {
 	printf '[dify-aio] %s\n' "$*"
 }
 
 is_true() {
-	local value="${1:-}"
+	local value="${1-}"
 	for truthy in ${AIO_TRUE_VALUES}; do
-		[[ "${value}" == "${truthy}" ]] && return 0
+		[[ ${value} == "${truthy}" ]] && return 0
+	done
+	return 1
+}
+
+blank_is_meaningful() {
+	local candidate="$1"
+	local name
+	for name in "${AIO_BLANK_IS_MEANINGFUL_VARS[@]}"; do
+		[[ ${candidate} == "${name}" ]] && return 0
 	done
 	return 1
 }
@@ -60,41 +72,80 @@ is_true() {
 normalize_blank_env() {
 	local name
 	for name in "$@"; do
-		if [[ -v ${name} && -z ${!name} ]]; then
+		if [[ -v ${name} && -z ${!name} ]] && ! blank_is_meaningful "${name}"; then
 			unset "${name}"
 		fi
 	done
 }
 
 normalize_blank_upstream_env() {
-	if [[ ! -f "${AIO_UPSTREAM_ENV_VARS_FILE}" ]]; then
+	if [[ ! -f ${AIO_UPSTREAM_ENV_VARS_FILE} ]]; then
 		return
 	fi
 
 	local name
 	while IFS= read -r name; do
-		[[ -z "${name}" || "${name}" == \#* ]] && continue
+		[[ -z ${name} || ${name} == \#* ]] && continue
 		normalize_blank_env "${name}"
 	done <"${AIO_UPSTREAM_ENV_VARS_FILE}"
 }
 
 load_generated_env() {
-	if [[ -f "${AIO_ENV_FILE}" ]]; then
-		set -a
-		# shellcheck disable=SC1090
-		. "${AIO_ENV_FILE}"
-		set +a
-	fi
+	[[ -f ${AIO_ENV_FILE} ]] || return
+
+	local line key value
+	while IFS= read -r line || [[ -n ${line} ]]; do
+		line="${line#"${line%%[![:space:]]*}"}"
+		line="${line%"${line##*[![:space:]]}"}"
+		[[ -z ${line} || ${line} == \#* ]] && continue
+
+		if [[ ! ${line} =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+			aio_log "Ignoring invalid generated env line: ${line%%=*}"
+			continue
+		fi
+
+		key="${line%%=*}"
+		value="${line#*=}"
+		if [[ ${#value} -ge 2 ]]; then
+			if [[ ${value:0:1} == '"' && ${value: -1} == '"' ]]; then
+				value="${value:1:${#value}-2}"
+			elif [[ ${value:0:1} == "'" && ${value: -1} == "'" ]]; then
+				value="${value:1:${#value}-2}"
+			fi
+		fi
+
+		if [[ -z ${!key-} ]]; then
+			export "${key}=${value}"
+		fi
+	done <"${AIO_ENV_FILE}"
 }
 
 load_extra_env() {
 	local extra_env_file="${DIFY_AIO_EXTRA_ENV_FILE:-/appdata/config/extra.env}"
-	if [[ -f "${extra_env_file}" ]]; then
-		set -a
-		# shellcheck disable=SC1090
-		. "${extra_env_file}"
-		set +a
-	fi
+	[[ -f ${extra_env_file} ]] || return
+
+	local line key value
+	while IFS= read -r line || [[ -n ${line} ]]; do
+		line="${line#"${line%%[![:space:]]*}"}"
+		line="${line%"${line##*[![:space:]]}"}"
+		[[ -z ${line} || ${line} == \#* ]] && continue
+
+		if [[ ! ${line} =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+			aio_log "Ignoring invalid extra env line: ${line%%=*}"
+			continue
+		fi
+
+		key="${line%%=*}"
+		value="${line#*=}"
+		if [[ ${#value} -ge 2 ]]; then
+			if [[ ${value:0:1} == '"' && ${value: -1} == '"' ]]; then
+				value="${value:1:${#value}-2}"
+			elif [[ ${value:0:1} == "'" && ${value: -1} == "'" ]]; then
+				value="${value:1:${#value}-2}"
+			fi
+		fi
+		export "${key}=${value}"
+	done <"${extra_env_file}"
 }
 
 persist_if_missing() {
@@ -111,7 +162,10 @@ persist_secret_if_unset() {
 	if [[ -n ${!key-} ]]; then
 		return
 	fi
-	persist_if_missing "${key}" "$(openssl rand -hex 32 | tr -d '\n')"
+	local generated_secret
+	generated_secret="$(openssl rand -hex 32)"
+	generated_secret="${generated_secret//$'\n'/}"
+	persist_if_missing "${key}" "${generated_secret}"
 }
 
 urlencode_value() {
@@ -155,9 +209,10 @@ set_public_url_if_default() {
 	local current="${!name-}"
 
 	case "${current}" in
-		"" | http://127.0.0.1:* | http://localhost:* | ws://127.0.0.1:* | ws://localhost:*)
-			export "${name}=${value}"
-			;;
+	"" | http://127.0.0.1:* | http://localhost:* | ws://127.0.0.1:* | ws://localhost:*)
+		export "${name}=${value}"
+		;;
+	*) ;;
 	esac
 }
 
@@ -178,9 +233,10 @@ configure_dify_env() {
 	export LOG_OUTPUT_FORMAT="${LOG_OUTPUT_FORMAT:-text}"
 	export LOG_FILE="${LOG_FILE:-/appdata/logs/server.log}"
 	export NEXT_TELEMETRY_DISABLED="${NEXT_TELEMETRY_DISABLED:-1}"
+	export CHECK_UPDATE_URL="${CHECK_UPDATE_URL-}"
 
 	export DIFY_PORT="${DIFY_PORT:-5001}"
-	export DIFY_BIND_ADDRESS="${DIFY_BIND_ADDRESS:-0.0.0.0}"
+	export DIFY_BIND_ADDRESS="${DIFY_BIND_ADDRESS:-127.0.0.1}"
 	export SERVER_WORKER_AMOUNT="${SERVER_WORKER_AMOUNT:-1}"
 	export SERVER_WORKER_CLASS="${SERVER_WORKER_CLASS:-geventwebsocket.gunicorn.workers.GeventWebSocketWorker}"
 	export SERVER_WORKER_CONNECTIONS="${SERVER_WORKER_CONNECTIONS:-10}"
@@ -260,17 +316,17 @@ configure_dify_env() {
 	export NGINX_PROXY_SEND_TIMEOUT="${NGINX_PROXY_SEND_TIMEOUT:-3600s}"
 	export NGINX_WORKER_PROCESSES="${NGINX_WORKER_PROCESSES:-auto}"
 	export DIFY_WEB_PORT="${DIFY_WEB_PORT:-3000}"
-	export DIFY_WEB_HOST="${DIFY_WEB_HOST:-0.0.0.0}"
+	export DIFY_WEB_HOST="${DIFY_WEB_HOST:-127.0.0.1}"
 
 	export MARKETPLACE_ENABLED="${MARKETPLACE_ENABLED:-true}"
 	export MARKETPLACE_API_URL="${MARKETPLACE_API_URL:-https://marketplace.dify.ai}"
 	export MARKETPLACE_URL="${MARKETPLACE_URL:-https://marketplace.dify.ai}"
-	export NEXT_PUBLIC_SOCKET_URL="${NEXT_PUBLIC_SOCKET_URL:-}"
+	export NEXT_PUBLIC_SOCKET_URL="${NEXT_PUBLIC_SOCKET_URL-}"
 	export ENABLE_WEBSITE_FIRECRAWL="${ENABLE_WEBSITE_FIRECRAWL:-true}"
 	export ENABLE_WEBSITE_JINAREADER="${ENABLE_WEBSITE_JINAREADER:-true}"
 	export ENABLE_WEBSITE_WATERCRAWL="${ENABLE_WEBSITE_WATERCRAWL:-true}"
 
-	if [[ -n ${DIFY_AIO_PUBLIC_URL:-} ]]; then
+	if [[ -n ${DIFY_AIO_PUBLIC_URL-} ]]; then
 		local public_url="${DIFY_AIO_PUBLIC_URL%/}"
 		local socket_url="${public_url/http/ws}"
 		set_public_url_if_default "CONSOLE_WEB_URL" "${public_url}"
@@ -282,13 +338,13 @@ configure_dify_env() {
 		set_public_url_if_default "FILES_URL" "${public_url}"
 		set_public_url_if_default "NEXT_PUBLIC_SOCKET_URL" "${socket_url}"
 	else
-		export CONSOLE_WEB_URL="${CONSOLE_WEB_URL:-}"
-		export CONSOLE_API_URL="${CONSOLE_API_URL:-}"
-		export SERVICE_API_URL="${SERVICE_API_URL:-}"
+		export CONSOLE_WEB_URL="${CONSOLE_WEB_URL-}"
+		export CONSOLE_API_URL="${CONSOLE_API_URL-}"
+		export SERVICE_API_URL="${SERVICE_API_URL-}"
 		export TRIGGER_URL="${TRIGGER_URL:-http://localhost}"
-		export APP_WEB_URL="${APP_WEB_URL:-}"
-		export APP_API_URL="${APP_API_URL:-}"
-		export FILES_URL="${FILES_URL:-}"
+		export APP_WEB_URL="${APP_WEB_URL-}"
+		export APP_API_URL="${APP_API_URL-}"
+		export FILES_URL="${FILES_URL-}"
 	fi
 	export INTERNAL_FILES_URL="${INTERNAL_FILES_URL:-http://127.0.0.1:5001}"
 }
