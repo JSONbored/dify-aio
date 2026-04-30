@@ -10,13 +10,30 @@ from xml.sax.saxutils import (  # nosec B406 - used only for XML escaping, not p
     escape,
 )
 
+try:
+    from template_changes import changes_body_from_changelog, encode_for_template
+except ImportError:  # pragma: no cover - used when imported as a package module
+    from scripts.template_changes import (
+        changes_body_from_changelog,
+        encode_for_template,
+    )
+
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = ROOT / "dify-aio.xml"
+CHANGELOG_PATH = ROOT / "CHANGELOG.md"
 UPSTREAM_ENV_PATH = ROOT / "docs/upstream/dify.env.example"
 UPSTREAM_ENV_VARS_PATH = ROOT / "rootfs/opt/dify-aio/upstream-env-vars.txt"
 
 GENERATED_CHANGELOG_NOTE = (
     "Generated from CHANGELOG.md during release preparation. Do not edit manually."
+)
+INITIAL_CHANGES_BODY = "\n".join(
+    (
+        "### 2026-04-29",
+        f"- {GENERATED_CHANGELOG_NOTE}",
+        "- Scaffold Dify AIO from the current Unraid AIO template.",
+        "- Bundle Dify API, web, worker, beat, sandbox, plugin daemon, PostgreSQL/pgvector, Redis, Nginx, and SSRF proxy defaults.",
+    )
 )
 
 SECRET_KEYWORDS = (
@@ -1142,6 +1159,9 @@ def generated_upstream_configs(
 
 def render_template(configs: list[Config]) -> str:
     config_lines = "\n".join(render_config(config) for config in configs)
+    changes = encode_for_template(
+        changes_body_from_changelog(CHANGELOG_PATH, fallback=INITIAL_CHANGES_BODY)
+    )
     return f"""<?xml version="1.0"?>
 <Container version="2">
   <Name>dify-aio</Name>
@@ -1154,11 +1174,7 @@ def render_template(configs: list[Config]) -> str:
   <Support>https://github.com/JSONbored/dify-aio/issues</Support>
   <Project>https://github.com/JSONbored/dify-aio</Project>
   <Overview>Dify AIO packages the Dify self-hosted stack for Unraid in one practical container: API, workers, web UI, plugin daemon, code sandbox, SSRF proxy, Nginx, PostgreSQL with pgvector, and Redis. Leave the defaults in place for a first install, open the Web UI, and create the initial admin account. Secrets are generated on first boot under /appdata/config/generated.env. Advanced users can point Dify at external PostgreSQL, Redis, object storage, vector databases, SMTP, reverse proxy URLs, observability endpoints, and the broader upstream Dify environment surface.</Overview>
-  <Changes>### 2026-04-29&#xD;
-- {GENERATED_CHANGELOG_NOTE}&#xD;
-- Scaffold Dify AIO from the current Unraid AIO template.&#xD;
-- Bundle Dify API, web, worker, beat, sandbox, plugin daemon, PostgreSQL/pgvector, Redis, Nginx, and SSRF proxy defaults.&#xD;
-</Changes>
+  <Changes>{changes}</Changes>
   <Category>AI Productivity Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/dify-aio.xml</TemplateURL>
