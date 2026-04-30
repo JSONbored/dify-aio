@@ -5,14 +5,20 @@ on:
     branches: [main]
     paths:
       - "*.xml"
+      - ".github/**"
       - ".github/workflows/**"
       - ".trunk/**"
+      - "AGENTS.md"
       - "CHANGELOG.md"
       - "Dockerfile"
+      - "README.md"
+      - "SECURITY.md"
+      - "SUPPORT.md"
       - "assets/**"
       - "cliff.toml"
       - "components.toml"
       - "components/**"
+      - "docs/**"
       - "docs/upstream/**"
       - "pyproject.toml"
       - "renovate.json"
@@ -25,14 +31,20 @@ on:
     branches: [main]
     paths:
       - "*.xml"
+      - ".github/**"
       - ".github/workflows/**"
       - ".trunk/**"
+      - "AGENTS.md"
       - "CHANGELOG.md"
       - "Dockerfile"
+      - "README.md"
+      - "SECURITY.md"
+      - "SUPPORT.md"
       - "assets/**"
       - "cliff.toml"
       - "components.toml"
       - "components/**"
+      - "docs/**"
       - "docs/upstream/**"
       - "pyproject.toml"
       - "renovate.json"
@@ -58,7 +70,7 @@ concurrency:
 
 jobs:
   aio-build:
-    uses: JSONbored/aio-fleet/.github/workflows/aio-build.yml@337b82e04d6d1b887c704326a967bb1b10416752
+    uses: JSONbored/aio-fleet/.github/workflows/aio-build.yml@01163d070460034ea975df7b57d34b6178f33e97
     permissions:
       contents: read
       packages: write
