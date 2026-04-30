@@ -30,7 +30,7 @@ def http_json(url: str, headers: dict[str, str] | None = None) -> object:
         url,
         headers={
             "Accept": "application/vnd.github+json, application/json",
-            "User-Agent": "jsonbored-unraid-aio-template",
+            "User-Agent": "jsonbored-dify-aio",
             **(headers or {}),
         },
     )
@@ -174,7 +174,7 @@ def ghcr_digest_for_tag(image: str, tag: str) -> str:
                 ]
             ),
             "Authorization": f"Bearer {token}",
-            "User-Agent": "jsonbored-unraid-aio-template",
+            "User-Agent": "jsonbored-dify-aio",
         },
     )
     try:
@@ -217,7 +217,7 @@ def dockerhub_digest_for_tag(image: str, tag: str) -> str:
                 ]
             ),
             "Authorization": f"Bearer {token_data['token']}",
-            "User-Agent": "jsonbored-unraid-aio-template",
+            "User-Agent": "jsonbored-dify-aio",
         },
     )
     try:

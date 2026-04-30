@@ -1,0 +1,19 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+configure_dify_env
+
+wait_for_tcp "127.0.0.1" "${DIFY_WEB_PORT:-3000}" "Dify web"
+wait_for_http_url "http://127.0.0.1:5001/health" "Dify API"
+
+envsubst '${NGINX_PROXY_READ_TIMEOUT} ${NGINX_PROXY_SEND_TIMEOUT}' \
+	< /opt/dify-aio/nginx/proxy.conf \
+	> /etc/nginx/conf.d/proxy.conf
+
+envsubst '${NGINX_PORT} ${NGINX_SERVER_NAME} ${NGINX_CLIENT_MAX_BODY_SIZE} ${DIFY_WEB_PORT} ${PLUGIN_DAEMON_PORT}' \
+	< /opt/dify-aio/nginx/default.conf.template \
+	> /etc/nginx/conf.d/default.conf
+exec nginx -g 'daemon off;'

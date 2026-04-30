@@ -2,27 +2,50 @@
 # shellcheck shell=bash
 set -euo pipefail
 
-mkdir -p /config/aio
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
 
-ENV_FILE="/config/aio/generated.env"
-touch "${ENV_FILE}"
-chown root:appuser /config/aio "${ENV_FILE}"
-chmod 750 /config/aio
-chmod 640 "${ENV_FILE}"
+mkdir -p \
+	"${AIO_CONFIG_DIR}" \
+	/appdata/logs \
+	/appdata/nginx \
+	/appdata/plugin_daemon \
+	/appdata/postgres \
+	/appdata/redis \
+	/appdata/sandbox/conf \
+	/appdata/sandbox/dependencies \
+	/appdata/storage \
+	/run/postgresql
 
-persist_if_missing() {
-	local key="$1"
-	local value="$2"
-	if grep -q "^${key}=" "${ENV_FILE}"; then
-		return
-	fi
-	printf '%s="%s"\n' "${key}" "${value}" >>"${ENV_FILE}"
-}
+touch "${AIO_ENV_FILE}"
+touch "${DIFY_AIO_EXTRA_ENV_FILE:-/appdata/config/extra.env}"
+chmod 700 "${AIO_CONFIG_DIR}"
+chmod 600 "${AIO_ENV_FILE}"
+chmod 600 "${DIFY_AIO_EXTRA_ENV_FILE:-/appdata/config/extra.env}"
 
-# Replace these with any first-run secrets your app needs.
-if [[ -z ${APP_SECRET_KEY-} ]]; then
-	generated_secret="$(openssl rand -hex 64)"
-	persist_if_missing "APP_SECRET_KEY" "${generated_secret}"
-fi
+persist_secret_if_unset "SECRET_KEY"
+persist_secret_if_unset "DB_PASSWORD"
+persist_secret_if_unset "REDIS_PASSWORD"
+persist_secret_if_unset "SANDBOX_API_KEY"
+persist_secret_if_unset "PLUGIN_DAEMON_KEY"
+persist_secret_if_unset "PLUGIN_DIFY_INNER_API_KEY"
 
-echo "[aio-template] Generated first-run values are stored at ${ENV_FILE}."
+load_generated_env
+configure_dify_env
+
+rm -rf /app/api/storage
+ln -sfn /appdata/storage /app/api/storage
+
+cp -n /opt/dify-sandbox/conf/config.yaml /appdata/sandbox/conf/config.yaml 2>/dev/null || true
+cp -n /opt/dify-sandbox/dependencies/python-requirements.txt /appdata/sandbox/dependencies/python-requirements.txt 2>/dev/null || true
+rm -rf /conf /dependencies
+ln -sfn /appdata/sandbox/conf /conf
+ln -sfn /appdata/sandbox/dependencies /dependencies
+
+chown -R dify:dify /appdata/storage /appdata/plugin_daemon /app/api/storage /opt/dify-web
+chown -R postgres:postgres /appdata/postgres /run/postgresql
+chown -R proxy:proxy /var/log/squid /var/spool/squid
+chmod 700 /appdata/postgres
+
+aio_log "Generated first-run secrets are stored at ${AIO_ENV_FILE}."
+aio_log "Runtime preflight complete."

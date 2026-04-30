@@ -2,20 +2,20 @@
 
 ## Supported Versions
 
-Only the `main` branch, the current `latest` image tag, and the current semver template release tags are supported with security fixes.
+Only the `main` branch, the current `latest` image tag, and the current upstream-aligned version tags are supported with security fixes.
 
-| Version                              | Supported |
-| ------------------------------------ | --------- |
-| main                                 | yes       |
-| latest                               | yes       |
-| current semver template release tags | yes       |
-| older                                | no        |
+| Version                       | Supported |
+| ----------------------------- | --------- |
+| main                          | yes       |
+| latest                        | yes       |
+| current upstream-aligned tags | yes       |
+| older                         | no        |
 
 ## Reporting a Vulnerability
 
 Do not open public issues for suspected vulnerabilities.
 
-- Preferred: GitHub private vulnerability report for the affected repository
+- Preferred: GitHub private vulnerability report for this repository
 - Fallback: email `security@aethereal.dev`
 
 Include:

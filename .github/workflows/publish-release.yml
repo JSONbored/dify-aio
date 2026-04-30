@@ -1,4 +1,4 @@
-name: Publish Release / Template
+name: Publish Release / Dify AIO
 
 on:
   workflow_dispatch:

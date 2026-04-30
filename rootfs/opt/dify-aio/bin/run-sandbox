@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+configure_dify_env
+
+export API_KEY="${SANDBOX_API_KEY}"
+export GIN_MODE="${SANDBOX_GIN_MODE}"
+export WORKER_TIMEOUT="${SANDBOX_WORKER_TIMEOUT}"
+export ENABLE_NETWORK="${SANDBOX_ENABLE_NETWORK}"
+export HTTP_PROXY="${SANDBOX_HTTP_PROXY}"
+export HTTPS_PROXY="${SANDBOX_HTTPS_PROXY}"
+export SANDBOX_PORT
+export PIP_MIRROR_URL="${PIP_MIRROR_URL-}"
+export LD_LIBRARY_PATH="/opt/python/lib:${LD_LIBRARY_PATH-}"
+export PATH="/opt/socket/bin:/opt/python/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+node_dir="$(find /opt -maxdepth 1 -type d -name 'node-v*-linux-*' | sort | head -n1)"
+if [[ -z ${node_dir} ]]; then
+	node_archive="$(find /opt -maxdepth 1 -name 'node-v*-linux-*.tar.xz' | sort | head -n1)"
+	if [[ -n ${node_archive} ]]; then
+		tar -xJf "${node_archive}" -C /opt
+		node_dir="$(find /opt -maxdepth 1 -type d -name 'node-v*-linux-*' | sort | head -n1)"
+	fi
+fi
+
+if [[ -n ${node_dir} ]]; then
+	export PATH="${node_dir}/bin:${PATH}"
+fi
+
+cd /
+exec /opt/dify-sandbox/main

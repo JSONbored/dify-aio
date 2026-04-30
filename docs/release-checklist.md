@@ -4,7 +4,7 @@
 
 - replace every placeholder value and example hostname
 - replace `assets/app-icon.png`
-- rename `template-aio.xml`
+- confirm `dify-aio.xml` is the only root XML template
 - confirm README, SECURITY, and FUNDING are accurate
 - confirm `Support`, `Project`, `TemplateURL`, and `Icon` URLs are correct
 - pin the upstream version explicitly
@@ -13,6 +13,7 @@
 - set the repo About description, topics, and social preview image
 - run `pytest tests/unit tests/template`
 - run `pytest tests/integration -m integration`
+- run `pytest tests/integration -m extended_integration` before public submission or major upstream/config changes
 
 ## Before Enabling Actions
 
@@ -31,5 +32,5 @@
 - confirm GHCR package is public and pullable
 - confirm `awesome-unraid` contains the XML and icon
 - confirm the README first-run notes match the real install behavior
-- if using release tags, confirm version tags such as `v1.2.3` publish the expected image tags
+- confirm version tags such as `1.14.0-aio.1` publish the expected image tags
 - confirm the upstream monitor opens the expected PR or issue path

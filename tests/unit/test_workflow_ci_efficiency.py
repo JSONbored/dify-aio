@@ -9,7 +9,7 @@ PYTEST_ACTION = Path(".github/actions/run-pytest/action.yml")
 def test_pytest_jobs_use_shared_local_action() -> None:
     workflow = BUILD_WORKFLOW.read_text()
 
-    assert workflow.count("uses: ./.github/actions/run-pytest") == 2  # nosec B101
+    assert workflow.count("uses: ./.github/actions/run-pytest") == 3  # nosec B101
     assert "Upload unit test results to Trunk" not in workflow  # nosec B101
     assert "Upload integration test results to Trunk" not in workflow  # nosec B101
     assert "trunk-io/analytics-uploader@" in PYTEST_ACTION.read_text()  # nosec B101
@@ -18,16 +18,29 @@ def test_pytest_jobs_use_shared_local_action() -> None:
 def test_integration_and_publish_share_docker_cache_scope() -> None:
     workflow = BUILD_WORKFLOW.read_text()
 
-    assert "DOCKER_CACHE_SCOPE: unraid-aio-template-image" in workflow  # nosec B101
+    assert "DOCKER_CACHE_SCOPE: dify-aio-image" in workflow  # nosec B101
     assert (  # nosec B101
-        workflow.count("cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}") == 2
+        workflow.count("cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}") == 3
     )
     assert (  # nosec B101
         workflow.count(
             "cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}"
         )
-        == 2
+        == 3
     )
+
+
+def test_publish_mirrors_tags_to_docker_hub_when_configured() -> None:
+    workflow = BUILD_WORKFLOW.read_text()
+
+    assert "Resolve Docker Hub publish settings" in workflow  # nosec B101
+    assert "Login to Docker Hub" in workflow  # nosec B101
+    assert "secrets.DOCKERHUB_USERNAME" in workflow  # nosec B101
+    assert "secrets.DOCKERHUB_TOKEN" in workflow  # nosec B101
+    assert "vars.DOCKERHUB_IMAGE_NAME" in workflow  # nosec B101
+    assert 'if [[ "${DOCKERHUB_ENABLED}" == "true" ]]; then' in workflow  # nosec B101
+    assert 'echo "${image_dockerhub}:latest"' in workflow  # nosec B101
+    assert 'echo "${image_dockerhub}:sha-${GITHUB_SHA}"' in workflow  # nosec B101
 
 
 def test_template_only_changes_do_not_run_integration_or_publish() -> None:
@@ -54,4 +67,17 @@ def test_local_actions_participate_in_ci_change_detection_and_pin_checks() -> No
     assert ".github/actions/**|.github/workflows/*)" in workflow  # nosec B101
     assert (
         'pathlib.Path(".github/actions").glob("*/action.yml")' in workflow
+    )  # nosec B101
+
+
+def test_extended_integration_is_manual_and_uses_marker() -> None:
+    workflow = BUILD_WORKFLOW.read_text()
+
+    assert "run_extended_integration" in workflow  # nosec B101
+    assert (  # nosec B101
+        "github.event_name == 'workflow_dispatch' && "
+        "inputs.run_extended_integration == true"
+    ) in workflow
+    assert (
+        "pytest-args: tests/integration -m extended_integration" in workflow
     )  # nosec B101

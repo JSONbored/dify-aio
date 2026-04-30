@@ -1,0 +1,25 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+configure_dify_env
+
+wait_for_http_url "http://127.0.0.1:5001/health" "Dify API"
+
+export DB_DATABASE="${DB_PLUGIN_DATABASE}"
+export DB_SSL_MODE="${DB_SSL_MODE:-disable}"
+export PLATFORM="${PLUGIN_PLATFORM:-local}"
+export SERVER_PORT="${PLUGIN_DAEMON_PORT}"
+export SERVER_KEY="${PLUGIN_DAEMON_KEY}"
+export MAX_PLUGIN_PACKAGE_SIZE="${PLUGIN_MAX_PACKAGE_SIZE:-52428800}"
+export DIFY_INNER_API_URL="${PLUGIN_DIFY_INNER_API_URL}"
+export DIFY_INNER_API_KEY="${PLUGIN_DIFY_INNER_API_KEY}"
+export PLUGIN_REMOTE_INSTALLING_HOST="${PLUGIN_DEBUGGING_HOST:-127.0.0.1}"
+export PLUGIN_REMOTE_INSTALLING_PORT="${PLUGIN_DEBUGGING_PORT:-5003}"
+export PLUGIN_STORAGE_LOCAL_ROOT
+
+cd /opt/dify-plugin-daemon
+/opt/dify-plugin-daemon/commandline migrate
+exec /opt/dify-plugin-daemon/main
