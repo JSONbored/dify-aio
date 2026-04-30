@@ -10,11 +10,11 @@
   <Support>https://github.com/JSONbored/dify-aio/issues</Support>
   <Project>https://github.com/JSONbored/dify-aio</Project>
   <Overview>Dify AIO packages the Dify self-hosted stack for Unraid in one practical container: API, workers, web UI, plugin daemon, code sandbox, SSRF proxy, Nginx, PostgreSQL with pgvector, and Redis. Leave the defaults in place for a first install, open the Web UI, and create the initial admin account. Secrets are generated on first boot under /appdata/config/generated.env. Advanced users can point Dify at external PostgreSQL, Redis, object storage, vector databases, SMTP, reverse proxy URLs, observability endpoints, and the broader upstream Dify environment surface.</Overview>
-  <Changes>### 2026-04-29&#xD;
+  <Changes>### 2026-04-30&#xD;
 - Generated from CHANGELOG.md during release preparation. Do not edit manually.&#xD;
-- Scaffold Dify AIO from the current Unraid AIO template.&#xD;
-- Bundle Dify API, web, worker, beat, sandbox, plugin daemon, PostgreSQL/pgvector, Redis, Nginx, and SSRF proxy defaults.&#xD;
-</Changes>
+- Add Dify AIO repository by @JSONbored&#xD;
+- Initial commit by @JSONbored&#xD;
+- @JSONbored made their first contribution in [#1](https://github.com/JSONbored/dify-aio/pull/1)</Changes>
   <Category>AI Productivity Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/dify-aio.xml</TemplateURL>
