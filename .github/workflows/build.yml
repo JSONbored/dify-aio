@@ -78,6 +78,7 @@ jobs:
       renovate_related: ${{ steps.filter.outputs.renovate_related }}
       tooling_related: ${{ steps.filter.outputs.tooling_related }}
       workflow_related: ${{ steps.filter.outputs.workflow_related }}
+      publish_related: ${{ steps.filter.outputs.publish_related }}
       run_tests_requested: ${{ steps.filter.outputs.run_tests_requested }}
       publish_requested: ${{ steps.filter.outputs.publish_requested }}
     steps:
@@ -106,6 +107,7 @@ jobs:
             echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
             echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
             echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+            echo "publish_related=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -124,6 +126,7 @@ jobs:
             echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
             echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
             echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+            echo "publish_related=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -135,6 +138,7 @@ jobs:
               echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
               echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
               echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+              echo "publish_related=true" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
           else
@@ -145,6 +149,7 @@ jobs:
               echo "renovate_related=true" >> "${GITHUB_OUTPUT}"
               echo "tooling_related=true" >> "${GITHUB_OUTPUT}"
               echo "workflow_related=true" >> "${GITHUB_OUTPUT}"
+              echo "publish_related=true" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
           fi
@@ -156,17 +161,26 @@ jobs:
           renovate_related=false
           tooling_related=false
           workflow_related=false
+          publish_related=false
 
           while IFS= read -r path; do
             [[ -z "${path}" ]] && continue
             case "${path}" in
-              Dockerfile|pyproject.toml|requirements-dev.txt|upstream.toml|components.toml|components/*|rootfs/*|tests/*|docs/upstream/*)
+              Dockerfile|upstream.toml|rootfs/*)
+                build_related=true
+                publish_related=true
+                ;;
+              pyproject.toml|requirements-dev.txt|components.toml|components/*|docs/upstream/*|tests/integration/*|tests/helpers.py|tests/conftest.py)
                 build_related=true
                 ;;
               *.xml|assets/*)
                 xml_related=true
                 ;;
-              CHANGELOG.md|cliff.toml|scripts/*|.trunk/*)
+              CHANGELOG.md)
+                tooling_related=true
+                publish_related=true
+                ;;
+              cliff.toml|scripts/*|.trunk/*|tests/*)
                 tooling_related=true
                 ;;
               .github/actions/**|.github/workflows/*)
@@ -184,6 +198,7 @@ jobs:
           echo "renovate_related=${renovate_related}" >> "${GITHUB_OUTPUT}"
           echo "tooling_related=${tooling_related}" >> "${GITHUB_OUTPUT}"
           echo "workflow_related=${workflow_related}" >> "${GITHUB_OUTPUT}"
+          echo "publish_related=${publish_related}" >> "${GITHUB_OUTPUT}"
 
   validate-template:
     needs: detect-changes
@@ -342,7 +357,7 @@ jobs:
           trunk-org-slug: ${{ env.TRUNK_ORG_URL_SLUG }}
 
   integration-tests:
-    if: ${{ needs.detect-changes.outputs.run_tests_requested == 'true' && needs.detect-changes.outputs.build_related == 'true' }}
+    if: ${{ needs.detect-changes.outputs.run_tests_requested == 'true' && (needs.detect-changes.outputs.build_related == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.publish_requested == 'true' && needs.detect-changes.outputs.publish_related == 'true')) }}
     needs:
       - detect-changes
       - validate-template
@@ -447,7 +462,7 @@ jobs:
           docker images
 
   publish:
-    if: ${{ needs.detect-changes.outputs.build_related == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.publish_requested == 'true' && needs.integration-tests.result == 'success' }}
+    if: ${{ needs.detect-changes.outputs.publish_related == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.publish_requested == 'true' && needs.integration-tests.result == 'success' }}
     needs:
       - detect-changes
       - validate-template
@@ -461,6 +476,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
@@ -522,15 +539,14 @@ jobs:
           upstream_plugin_daemon_version="$(sed -n 's/^ARG UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION=//p' Dockerfile | head -n1)"
           upstream_plugin_daemon_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_PLUGIN_DAEMON_DIGEST=//p' Dockerfile | head -n1)"
           changelog_version="$(python3 scripts/release.py latest-changelog-version 2>/dev/null || true)"
-          release_commit_pattern="^chore\\(release\\): $(python3 -c 'import re, sys; print(re.escape(sys.argv[1]))' "${changelog_version}")( \\(#[0-9]+\\))?$"
-          commit_message="$(git log -1 --pretty=%B)"
+          release_target_commit="$(python3 scripts/release.py find-release-target-commit "${changelog_version}" 2>/dev/null || true)"
           release_package_tag=""
           version_label="${upstream_version}"
           wrapper_track="main"
           case "${changelog_version}" in
             "${upstream_version}"-aio.*)
               candidate_revision="${changelog_version##*.}"
-              if [[ "${candidate_revision}" =~ ^[0-9]+$ ]] && printf '%s\n' "${commit_message}" | grep -Eq "${release_commit_pattern}"; then
+              if [[ "${candidate_revision}" =~ ^[0-9]+$ && "${release_target_commit}" == "${GITHUB_SHA}" ]]; then
                 release_package_tag="${changelog_version}"
                 version_label="${release_package_tag}"
                 wrapper_track="aio-v${candidate_revision}"

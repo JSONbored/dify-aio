@@ -43,21 +43,47 @@ def test_publish_mirrors_tags_to_docker_hub_when_configured() -> None:
     assert 'echo "${image_dockerhub}:sha-${GITHUB_SHA}"' in workflow  # nosec B101
 
 
-def test_template_only_changes_do_not_run_integration_or_publish() -> None:
+def test_template_release_changes_publish_but_unit_test_changes_do_not() -> None:
     workflow = BUILD_WORKFLOW.read_text()
 
+    assert (
+        "publish_related: ${{ steps.filter.outputs.publish_related }}" in workflow
+    )  # nosec B101
+    assert "publish_related=false" in workflow  # nosec B101
+    assert "publish_related=true" in workflow  # nosec B101
+    assert "Dockerfile|upstream.toml|rootfs/*)" in workflow  # nosec B101
+    assert "CHANGELOG.md)" in workflow  # nosec B101
+    assert "cliff.toml|scripts/*|.trunk/*|tests/*)" in workflow  # nosec B101
+    assert (
+        "tests/integration/*|tests/helpers.py|tests/conftest.py" in workflow
+    )  # nosec B101
     assert (  # nosec B101
         "needs.detect-changes.outputs.run_tests_requested == 'true' && "
-        "needs.detect-changes.outputs.build_related == 'true'"
+        "(needs.detect-changes.outputs.build_related == 'true' || "
+        "(github.event_name == 'push' && github.ref == 'refs/heads/main' && "
+        "needs.detect-changes.outputs.publish_requested == 'true' && "
+        "needs.detect-changes.outputs.publish_related == 'true'))"
     ) in workflow
     assert (  # nosec B101
-        "needs.detect-changes.outputs.build_related == 'true' && "
+        "needs.detect-changes.outputs.publish_related == 'true' && "
         "github.event_name == 'push'"
     ) in workflow
     assert (  # nosec B101
         "github.event_name == 'push' && github.ref == 'refs/heads/main' && "
         "needs.detect-changes.outputs.publish_requested == 'true'))"
     ) not in workflow
+
+
+def test_release_image_tags_use_release_target_commit() -> None:
+    workflow = BUILD_WORKFLOW.read_text()
+
+    assert "fetch-depth: 0" in workflow  # nosec B101
+    assert (  # nosec B101
+        'release_target_commit="$(python3 scripts/release.py find-release-target-commit "${changelog_version}"'
+        in workflow
+    )
+    assert '"${release_target_commit}" == "${GITHUB_SHA}"' in workflow  # nosec B101
+    assert "release_commit_pattern=" not in workflow  # nosec B101
 
 
 def test_local_actions_participate_in_ci_change_detection_and_pin_checks() -> None:
