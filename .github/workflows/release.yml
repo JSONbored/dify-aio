@@ -1,4 +1,4 @@
-name: Prepare Release / Template
+name: Prepare Release / Dify AIO
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_VERSION: ${{ steps.version.outputs.release_version }}
         run: |
-          previous_tag="$(python3 scripts/release.py latest-release-tag)"
+          previous_tag="$(python3 scripts/release.py latest-aio-tag)"
           if [[ -f CHANGELOG.md && -n "${previous_tag}" ]]; then
             git-cliff --config cliff.toml --tag "${RELEASE_VERSION}" "${previous_tag}..HEAD" --prepend CHANGELOG.md
           else
@@ -61,7 +61,7 @@ jobs:
             exit 1
           fi
 
-      - name: Sync template Changes from changelog
+      - name: Sync Dify template Changes from changelog
         if: steps.changes.outputs.has_changes == 'true'
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.release_version }}
@@ -78,8 +78,8 @@ jobs:
             This PR prepares `${{ steps.version.outputs.release_version }}`.
 
             - updates `CHANGELOG.md` with `git-cliff`
-            - syncs `template-aio.xml` `<Changes>` from `CHANGELOG.md`
+            - syncs `dify-aio.xml` `<Changes>` from `CHANGELOG.md`
             - is intended to be merged to `main`
-            - requires a separate manual `Publish Release / Template` run after merge
+            - requires a separate manual `Publish Release / Dify AIO` run after merge
           branch: "release/${{ steps.version.outputs.release_version }}"
           delete-branch: true

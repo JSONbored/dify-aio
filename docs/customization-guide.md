@@ -1,63 +1,60 @@
-# Customization Guide
+# Dify AIO Customization Guide
 
-Use this when turning the template into a real app repo.
+Use this when changing the wrapper after the initial scaffold.
 
-## First Pass
+## Runtime Surface
 
-1. Rename `template-aio.xml` to your final repo slug, for example `myapp-aio.xml`.
-2. Replace the placeholder upstream image in [`Dockerfile`](/tmp/unraid-aio-template/Dockerfile).
-3. Replace [`assets/app-icon.png`](/tmp/unraid-aio-template/assets/app-icon.png).
-4. Update [`README.md`](/tmp/unraid-aio-template/README.md), [`SECURITY.md`](/tmp/unraid-aio-template/SECURITY.md), and [`.github/FUNDING.yml`](/tmp/unraid-aio-template/.github/FUNDING.yml).
-5. Replace the starter service command in [`rootfs/etc/services.d/app/run`](/tmp/unraid-aio-template/rootfs/etc/services.d/app/run).
-6. Replace the starter pytest integration assertions in [`tests/integration/test_container_runtime.py`](/tmp/unraid-aio-template/tests/integration/test_container_runtime.py) with the real app lifecycle expectations.
-7. Configure [`upstream.toml`](/tmp/unraid-aio-template/upstream.toml) and pin the upstream version in the Dockerfile.
-8. Keep the XML `<Changes>` block in the date-first fleet format: `### YYYY-MM-DD` followed by short bullet lines only, then let [`scripts/update-template-changes.py`](/tmp/unraid-aio-template/scripts/update-template-changes.py) keep it synced from `CHANGELOG.md`.
+The AIO image supervises several Dify services inside one container:
 
-## Files You Will Almost Always Touch
+- API
+- worker
+- worker beat
+- web
+- plugin daemon
+- sandbox
+- SSRF proxy
+- Nginx
+- PostgreSQL with pgvector
+- Redis
 
-- [`Dockerfile`](/tmp/unraid-aio-template/Dockerfile)
-- [`template-aio.xml`](/tmp/unraid-aio-template/template-aio.xml)
-- [`README.md`](/tmp/unraid-aio-template/README.md)
-- [`pyproject.toml`](/tmp/unraid-aio-template/pyproject.toml)
-- [`tests/integration/test_container_runtime.py`](/tmp/unraid-aio-template/tests/integration/test_container_runtime.py)
-- [`scripts/validate-template.py`](/tmp/unraid-aio-template/scripts/validate-template.py)
-- [`scripts/update-template-changes.py`](/tmp/unraid-aio-template/scripts/update-template-changes.py)
-- [`rootfs/etc/cont-init.d/01-bootstrap.sh`](/tmp/unraid-aio-template/rootfs/etc/cont-init.d/01-bootstrap.sh)
-- [`rootfs/etc/services.d/app/run`](/tmp/unraid-aio-template/rootfs/etc/services.d/app/run)
-- [`upstream.toml`](/tmp/unraid-aio-template/upstream.toml)
+Keep changes scoped to the service that needs them. If an upstream Dify release changes the official Compose topology, compare this repo against the new `docker/docker-compose.yaml` and `.env.example` before bumping image tags.
 
-## Internal PostgreSQL
+## Defaults
 
-The template includes an optional PostgreSQL example because some AIO repos genuinely need an embedded database.
+Beginner defaults should keep a first install working with only one AppData mount and one Web UI port:
 
-If the derived app does not need internal PostgreSQL, remove:
+- `/appdata`
+- `8080/tcp`
+- bundled PostgreSQL
+- bundled Redis
+- `VECTOR_STORE=pgvector`
+- local OpenDAL filesystem storage
 
-- [`rootfs/etc/cont-init.d/02-init-postgres.sh`](/tmp/unraid-aio-template/rootfs/etc/cont-init.d/02-init-postgres.sh)
-- [`rootfs/etc/services.d/postgres/run`](/tmp/unraid-aio-template/rootfs/etc/services.d/postgres/run)
+Advanced settings should remain optional unless Dify itself makes them required.
 
-If the derived app does need internal PostgreSQL:
+Do not dump every upstream Dify environment variable into `dify-aio.xml`. The XML should expose the real Unraid operator surface and common third-party integrations. Keep the full upstream list in `rootfs/opt/dify-aio/upstream-env-vars.txt` and support rare variables through `/appdata/config/extra.env`.
 
-- install the required PostgreSQL packages in [`Dockerfile`](/tmp/unraid-aio-template/Dockerfile)
-- replace the example init script with real cluster/bootstrap logic
-- update the integration tests to validate persistence or first-boot expectations when relevant
+## Files To Check After Upstream Updates
 
-## CI and Publishing
+- [`Dockerfile`](../Dockerfile)
+- [`docs/upstream/dify.env.example`](upstream/dify.env.example)
+- [`dify-aio.xml`](../dify-aio.xml)
+- [`scripts/generate_dify_template.py`](../scripts/generate_dify_template.py)
+- [`rootfs/opt/dify-aio/lib/env.sh`](../rootfs/opt/dify-aio/lib/env.sh)
+- [`rootfs/etc/services.d`](../rootfs/etc/services.d)
+- [`tests/integration/test_container_runtime.py`](../tests/integration/test_container_runtime.py)
+- [`upstream.toml`](../upstream.toml)
 
-The build workflow publishes from `main` once the required registry and sync secrets are configured.
+## Validation Order
 
-Before enabling it:
+1. `python3 scripts/generate_dify_template.py --check`
+2. `python3 scripts/validate-template.py`
+3. `pytest tests/unit tests/template`
+4. `pytest tests/integration -m integration`
+5. install from the generated XML in a clean Unraid environment
+6. verify `http://<unraid-ip>:8080/install`
+7. verify restart persistence for `/appdata/config/generated.env`
 
-- run `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt`
-- run `pytest tests/unit tests/template`
-- run `pytest tests/integration -m integration`
-- set all required repository variables and secrets
-- confirm the XML, icon, and package names match the intended public repo
-- confirm the upstream monitor matches the real upstream source and stable channel
-- confirm `CHANGELOG.md` and the XML `<Changes>` block describe the same latest release
+## Current Known Follow-Up
 
-## Trust Signals To Add Before Public Launch
-
-- one screenshot or meaningful demo visual if the app has a UI
-- a real first-run section in the README
-- an honest limitations or caveats section if the app has rough edges
-- a clear `Support` and `Project` URL in the XML
+The upstream monitor is intentionally `strategy = "notify"` because Dify uses multiple pinned upstream image digests. Do not switch it to automatic PR updates until the workflow can refresh all companion image digests in the same change.

@@ -1,0 +1,54 @@
+server {
+    listen ${NGINX_PORT};
+    server_name ${NGINX_SERVER_NAME};
+    client_max_body_size ${NGINX_CLIENT_MAX_BODY_SIZE};
+
+    location /console/api {
+        proxy_pass http://127.0.0.1:5001;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
+    location /api {
+        proxy_pass http://127.0.0.1:5001;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:5001;
+        include /etc/nginx/conf.d/proxy.conf;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /v1 {
+        proxy_pass http://127.0.0.1:5001;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
+    location /files {
+        proxy_pass http://127.0.0.1:5001;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
+    location /mcp {
+        proxy_pass http://127.0.0.1:5001;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
+    location /triggers {
+        proxy_pass http://127.0.0.1:5001;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
+    location /e/ {
+        proxy_pass http://127.0.0.1:${PLUGIN_DAEMON_PORT};
+        proxy_set_header Dify-Hook-Url $scheme://$host$request_uri;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:${DIFY_WEB_PORT};
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+}

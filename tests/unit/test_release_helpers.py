@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from subprocess import (  # nosec B404 - tests construct return objects only
     CompletedProcess,
 )
@@ -7,6 +8,42 @@ from subprocess import (  # nosec B404 - tests construct return objects only
 import pytest
 
 from scripts import release
+
+
+def test_next_release_version_uses_upstream_aio_revision(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("ARG UPSTREAM_DIFY_VERSION=1.14.0\n")
+    upstream = tmp_path / "upstream.toml"
+    upstream.write_text('[upstream]\nversion_key = "UPSTREAM_DIFY_VERSION"\n')
+
+    monkeypatch.setattr(
+        release,
+        "git_tags",
+        lambda: ["1.13.1-aio.4", "1.14.0-aio.1", "1.14.0-aio.2"],
+    )
+
+    assert (  # nosec B101
+        release.next_release_version(dockerfile, upstream) == "1.14.0-aio.3"
+    )
+
+
+def test_next_release_version_starts_revision_for_new_upstream(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("ARG UPSTREAM_DIFY_VERSION=1.15.0\n")
+    upstream = tmp_path / "upstream.toml"
+    upstream.write_text('[upstream]\nversion_key = "UPSTREAM_DIFY_VERSION"\n')
+
+    monkeypatch.setattr(release, "git_tags", lambda: ["1.14.0-aio.2"])
+
+    assert (  # nosec B101
+        release.next_release_version(dockerfile, upstream) == "1.15.0-aio.1"
+    )
 
 
 def test_find_release_target_commit_returns_squash_release_commit(

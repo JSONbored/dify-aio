@@ -1,15 +1,11 @@
 [upstream]
-name = "Your App"
-type = "github-tag"
-repo = "owner/repository"
+name = "Dify"
+type = "github-release"
+repo = "langgenius/dify"
 version_source = "dockerfile-arg"
-version_key = "UPSTREAM_VERSION"
-strategy = "pr"
+version_key = "UPSTREAM_DIFY_VERSION"
+strategy = "notify"
 stable_only = true
-# Optional digest pinning for registries that publish immutable image digests.
-# digest_source = "dockerhub-manifest"
-# digest_key = "UPSTREAM_IMAGE_DIGEST"
-# image = "owner/image"
 
 [notifications]
-release_notes_url = ""
+release_notes_url = "https://github.com/langgenius/dify/releases"

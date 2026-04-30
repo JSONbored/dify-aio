@@ -1,0 +1,60 @@
+acl localnet src 0.0.0.1-0.255.255.255
+acl localnet src 10.0.0.0/8
+acl localnet src 100.64.0.0/10
+acl localnet src 169.254.0.0/16
+acl localnet src 172.16.0.0/12
+acl localnet src 192.168.0.0/16
+acl localnet src fc00::/7
+acl localnet src fe80::/10
+acl SSL_ports port 443
+acl Safe_ports port 80
+acl Safe_ports port 21
+acl Safe_ports port 443
+acl Safe_ports port 70
+acl Safe_ports port 210
+acl Safe_ports port 1025-65535
+acl Safe_ports port 280
+acl Safe_ports port 488
+acl Safe_ports port 591
+acl Safe_ports port 777
+acl CONNECT method CONNECT
+acl allowed_domains dstdomain .marketplace.dify.ai
+
+http_access allow allowed_domains
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+http_access allow localhost manager
+http_access deny manager
+http_access allow localhost
+include /etc/squid/conf.d/*.conf
+http_access deny all
+tcp_outgoing_address 0.0.0.0
+
+http_port 127.0.0.1:${SSRF_HTTP_PORT}
+coredump_dir /var/spool/squid
+refresh_pattern ^ftp: 1440 20% 10080
+refresh_pattern ^gopher: 1440 0% 1440
+refresh_pattern -i (/cgi-bin/|\?) 0 0% 0
+refresh_pattern . 0 20% 4320
+
+http_port 127.0.0.1:${SSRF_REVERSE_PROXY_PORT} accel vhost
+cache_peer ${SSRF_SANDBOX_HOST} parent ${SANDBOX_PORT} 0 no-query originserver
+acl src_all src all
+http_access allow src_all
+
+client_request_buffer_max_size 100 MB
+max_filedescriptors 65536
+connect_timeout ${SSRF_DEFAULT_CONNECT_TIME_OUT} seconds
+request_timeout 2 minutes
+read_timeout 2 minutes
+client_lifetime 5 minutes
+shutdown_lifetime 30 seconds
+server_persistent_connections on
+client_persistent_connections on
+persistent_request_timeout 30 seconds
+pconn_timeout 1 minute
+memory_cache_mode disk
+cache_mem 128 MB
+maximum_object_size_in_memory 512 KB
+access_log none
+cache_log /var/log/squid/cache.log

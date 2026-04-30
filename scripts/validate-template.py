@@ -17,6 +17,8 @@ except (
     from scripts.components import load_components
 
 ROOT = Path(__file__).resolve().parents[1]
+UPSTREAM_ENV_PATH = ROOT / "docs/upstream/dify.env.example"
+UPSTREAM_ENV_VARS_PATH = ROOT / "rootfs/opt/dify-aio/upstream-env-vars.txt"
 
 GENERATED_CHANGELOG_NOTE = (
     "Generated from CHANGELOG.md during release preparation. Do not edit manually."
@@ -34,12 +36,41 @@ LEGACY_CHANGELOG_MARKERS = (
 REQUIRED_TEXT_FIELDS = (
     "Support",
     "Project",
+    "Registry",
+    "ReadMe",
     "Overview",
     "Category",
     "TemplateURL",
     "Icon",
     "Changes",
 )
+
+REQUIRED_DIFY_TARGETS = {
+    "/appdata",
+    "8080",
+    "DB_SSL_MODE",
+    "DIFY_AIO_EXTRA_ENV_FILE",
+    "DIFY_AIO_PUBLIC_URL",
+    "DIFY_AIO_WAIT_TIMEOUT_SECONDS",
+    "DIFY_ENABLE_SANDBOX",
+    "DIFY_BIND_ADDRESS",
+    "DIFY_WEB_HOST",
+    "DIFY_WEB_PORT",
+    "DEPLOY_ENV",
+    "DIFY_USE_INTERNAL_POSTGRES",
+    "DIFY_USE_INTERNAL_REDIS",
+    "NEXT_TELEMETRY_DISABLED",
+    "PIP_MIRROR_URL",
+    "PLUGIN_DEBUGGING_HOST",
+    "PLUGIN_DEBUGGING_PORT",
+    "PLUGIN_MAX_PACKAGE_SIZE",
+    "PLUGIN_PLATFORM",
+    "SENDGRID_API_KEY",
+    "TZ",
+    "WORKFLOW_NODE_EXECUTION_STORAGE",
+}
+
+DIFY_CATEGORY_TOKENS = {"AI", "Productivity", "Tools:Utilities"}
 
 
 def resolve_template_path() -> Path:
@@ -178,10 +209,113 @@ def validate_template(xml_path: Path) -> int:
             print(f"  - {detail}", file=sys.stderr)
         return 1
 
+    if xml_path.name == "dify-aio.xml":
+        category = (root.findtext("Category") or "").strip()
+        category_tokens = set(category.split())
+        if category_tokens != DIFY_CATEGORY_TOKENS or any(
+            token.endswith(":") for token in category_tokens
+        ):
+            return fail(
+                f"{xml_path.name} Category should be 'AI Productivity Tools:Utilities'"
+            )
+
+        repository = (root.findtext("Repository") or "").strip()
+        registry = (root.findtext("Registry") or "").strip()
+        if repository != "jsonbored/dify-aio:latest":
+            return fail(
+                f"{xml_path.name} Repository should point at the Docker Hub CA image"
+            )
+        if registry != "https://hub.docker.com/r/jsonbored/dify-aio":
+            return fail(
+                f"{xml_path.name} Registry should point at the Docker Hub repository"
+            )
+
+        coverage_status = validate_dify_env_surface(root)
+        if coverage_status:
+            return coverage_status
+
     template_kind = "placeholder " if is_placeholder_template(xml_path) else ""
     print(
         f"{xml_path.name} parsed successfully and passed {template_kind}catalog-safe validation"
     )
+    return 0
+
+
+def parse_upstream_env_targets(path: Path) -> list[str]:
+    targets: list[str] = []
+    for line in path.read_text().splitlines():
+        match = re.match(r"^([A-Z_][A-Z0-9_]*)=", line)
+        if match:
+            targets.append(match.group(1))
+    return targets
+
+
+def validate_dify_env_surface(root: ET.Element) -> int:
+    if not UPSTREAM_ENV_PATH.exists():
+        return fail(f"Missing Dify upstream environment fixture: {UPSTREAM_ENV_PATH}")
+
+    configs_by_target = {
+        config.attrib["Target"]: config
+        for config in root.findall(".//Config")
+        if config.attrib.get("Target")
+    }
+    targets = set(configs_by_target)
+    upstream_targets = parse_upstream_env_targets(UPSTREAM_ENV_PATH)
+
+    try:
+        from generate_dify_template import is_curated_upstream_target
+    except ImportError:  # pragma: no cover - package import path for tests
+        from scripts.generate_dify_template import is_curated_upstream_target
+
+    curated_upstream_targets = {
+        target for target in upstream_targets if is_curated_upstream_target(target)
+    }
+    missing = sorted((curated_upstream_targets | REQUIRED_DIFY_TARGETS) - targets)
+    if missing:
+        print(
+            "dify-aio.xml is missing required Dify upstream/runtime targets:",
+            file=sys.stderr,
+        )
+        for target in missing:
+            print(f"  - {target}", file=sys.stderr)
+        return 1
+
+    if not UPSTREAM_ENV_VARS_PATH.exists():
+        return fail(
+            f"Missing generated upstream env-var list: {UPSTREAM_ENV_VARS_PATH}"
+        )
+
+    actual_env_vars = [
+        line.strip()
+        for line in UPSTREAM_ENV_VARS_PATH.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    if actual_env_vars != upstream_targets:
+        print(
+            "rootfs/opt/dify-aio/upstream-env-vars.txt drifted from docs/upstream/dify.env.example:",
+            file=sys.stderr,
+        )
+        expected_set = set(upstream_targets)
+        actual_set = set(actual_env_vars)
+        for target in sorted(expected_set - actual_set):
+            print(f"  - missing from env-var list: {target}", file=sys.stderr)
+        for target in sorted(actual_set - expected_set):
+            print(f"  - stale in env-var list: {target}", file=sys.stderr)
+        if expected_set == actual_set:
+            print(
+                "  - env-var list order differs from the upstream fixture",
+                file=sys.stderr,
+            )
+        return 1
+
+    try:
+        from generate_dify_template import check_outputs
+    except ImportError:  # pragma: no cover - package import path for tests
+        from scripts.generate_dify_template import check_outputs
+
+    if check_outputs():
+        return 1
+
     return 0
 
 

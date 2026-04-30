@@ -1,138 +1,124 @@
-# Unraid AIO Template
+# dify-aio
 
-A hardened starter for future `*-aio` repositories: one public repo per app, one companion GHCR image, one Unraid CA XML, and one beginner-first experience that still leaves room for power-user overrides.
+![dify-aio](https://socialify.git.ci/JSONbored/dify-aio/image?custom_description=Dify+offers+everything+you+need+%E2%80%94+agentic+workflows%2C+RAG+pipelines%2C+integrations%2C+and+observability+%E2%80%94+all+in+one+place%2C+putting+AI+power+into+your+hands.&custom_language=Dockerfile&description=1&font=Raleway&forks=1&issues=1&language=1&logo=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F127165244%3Fs%3D200%26v%3D4&name=1&owner=1&pattern=Floating+Cogs&pulls=1&stargazers=1&theme=Light)
 
-This template is opinionated on purpose. It is built for repos that should be:
+Unraid-first AIO wrapper for [Dify](https://github.com/langgenius/dify), an open-source platform for building agentic workflows, chat apps, knowledge-base apps, and LLM-backed automations.
 
-- easy for newcomers to install
-- honest about what is embedded versus external
-- reproducible in CI before publishing `latest`
-- cleanly syncable into `awesome-unraid`
+`dify-aio` packages the practical self-hosted Dify stack into one Unraid-friendly image with persistent appdata, first-boot secret generation, and an advanced template surface for operators who need external databases, vector stores, object storage, mail, observability, sandbox, plugin, and datasource settings.
 
-## What This Template Ships With
+## Status
 
-- starter [`Dockerfile`](/tmp/unraid-aio-template/Dockerfile) for wrapping an upstream image with `s6-overlay`
-- starter CA XML at [`template-aio.xml`](/tmp/unraid-aio-template/template-aio.xml)
-- shared pytest harness under [`tests/`](/tmp/unraid-aio-template/tests)
-- generic XML validator at [`scripts/validate-template.py`](/tmp/unraid-aio-template/scripts/validate-template.py)
-- optional suite component manifest support via [`components.toml`](/tmp/unraid-aio-template/docs/suite-components.md)
-- CI gate helper at [`scripts/ci_flags.py`](/tmp/unraid-aio-template/scripts/ci_flags.py)
-- changelog-to-XML sync helper at [`scripts/update-template-changes.py`](/tmp/unraid-aio-template/scripts/update-template-changes.py)
-- derived-repo guardrail script at [`scripts/validate-derived-repo.sh`](/tmp/unraid-aio-template/scripts/validate-derived-repo.sh)
-- upstream monitor scaffold at [`upstream.toml`](/tmp/unraid-aio-template/upstream.toml)
-- GitHub Actions for validation, pytest-backed integration gating, main-branch publish, security checks, and optional `awesome-unraid` sync
-- starter docs, changelog, funding, issue templates, and security policy
-- public repo checklists under [`docs/`](/tmp/unraid-aio-template/docs)
+This repository is pre-release. The source template, generated XML, and local container boot path are covered by pytest-backed validation. Community Applications submission is intentionally separate and should happen only after the source template is finalized.
 
-## Design Principles
+## What This Image Includes
 
-- single-container first when it is realistic and not misleading
-- safe defaults for beginners, advanced knobs for power users
-- generated first-run secrets only when the app truly needs them
-- no publish until placeholders are gone and pytest passes
-- pinned workflow action SHAs and Renovate-managed dependency updates
-- stable-only upstream tracking with PR-first updates
-- optional upstream image digest tracking for repos that pin immutable manifests
-- update automation opens PRs, but merge decisions stay manual
-- public repos stay public-facing and product-facing only
+- Dify API, worker, and beat services from `langgenius/dify-api`
+- Dify web UI from `langgenius/dify-web`
+- Dify plugin daemon from `langgenius/dify-plugin-daemon`
+- Dify sandbox from `langgenius/dify-sandbox`
+- Nginx gateway on port `8080`
+- SSRF proxy for sandboxed code execution
+- bundled PostgreSQL 15 with pgvector by default
+- bundled Redis by default
+- first-boot secret generation under `/appdata/config/generated.env`, with explicit Unraid template values taking precedence
+- optional `/appdata/config/extra.env` escape hatch for rare upstream variables
+- Unraid CA source template at [dify-aio.xml](dify-aio.xml)
 
-## Recommended Workflow
+## Beginner Install
 
-1. Create a new private repo from this template.
-2. Rename `template-aio.xml` to the final app slug, for example `myapp-aio.xml`.
-3. Replace placeholders in the Dockerfile, XML, rootfs scripts, pytest harness, README, funding file, and security policy.
-4. Replace [`assets/app-icon.png`](/tmp/unraid-aio-template/assets/app-icon.png) with the real icon.
-5. Follow [`docs/customization-guide.md`](/tmp/unraid-aio-template/docs/customization-guide.md).
-6. Follow [`docs/repo-settings.md`](/tmp/unraid-aio-template/docs/repo-settings.md).
-7. Once secrets are configured, let `main` pushes handle package publishing and downstream XML sync PRs automatically.
-8. Install the Renovate GitHub App for the derived repo so pinned actions and Docker dependencies stay current.
-9. Configure [`upstream.toml`](/tmp/unraid-aio-template/upstream.toml) so the repo can monitor the wrapped upstream app.
-10. Keep the XML `<Changes>` block in the fleet-standard date-first format: `### YYYY-MM-DD` followed by short bullet lines only.
+If you want the simplest supported path:
 
-For ecosystems that need companion images such as agents, workers, or proxies,
-use the optional suite component pattern in
-[`docs/suite-components.md`](/tmp/unraid-aio-template/docs/suite-components.md).
-Most repos should still stay single-component unless the companion is tightly
-bound to the same upstream product and support surface.
+1. Install the Unraid template with the default settings.
+2. Start the container and wait for the first boot to complete.
+3. Open `http://<unraid-ip>:8080/install`.
+4. Create the initial admin account.
+5. Add model-provider keys, SMTP, storage, datasource, and integration credentials inside Dify as needed.
 
-## Actions Variables
+If `INIT_PASSWORD` is set in the template, Dify uses it as the initial admin password. Dify limits that value to 30 characters.
 
-No Actions variables are required for the default JSONbored workflow.
+For most users, the default bundled PostgreSQL, pgvector, Redis, sandbox, plugin daemon, and local file storage path is the right first install.
 
-Optional overrides:
+## Power User Surface
 
-- `IMAGE_NAME_OVERRIDE=jsonbored/yourapp-aio`
-- `TEMPLATE_XML=yourapp-aio.xml`
-- `AWESOME_UNRAID_REPOSITORY=JSONbored/awesome-unraid`
-- `AWESOME_UNRAID_XML_NAME=yourapp-aio.xml`
-- `AWESOME_UNRAID_ICON_NAME=yourapp.png`
-- `TEMPLATE_ICON_PATH=assets/app-icon.png`
+This repo is deliberately not a stripped-down wrapper. The generated Unraid template exposes the practical Dify self-hosted environment surface while keeping the first-run form small enough to use.
 
-If you do not set the optional sync overrides, the workflow defaults to:
+In Advanced View you can:
 
-- target repo: `JSONbored/awesome-unraid`
-- XML name: `<repo-name>.xml`
-- icon path: `assets/app-icon.png`
-- icon name: derived from the XML name, for example `yourapp-aio.xml -> yourapp.png`
+- move PostgreSQL out of the container with `DIFY_USE_INTERNAL_POSTGRES=false` and external `DB_*` settings
+- move Redis out of the container with `DIFY_USE_INTERNAL_REDIS=false` and external `REDIS_*` settings
+- select external vector stores such as Qdrant, Weaviate, Milvus, Chroma, OpenSearch, Elasticsearch, Upstash, and other upstream-supported backends
+- use local OpenDAL filesystem storage or configure S3-compatible object storage and other upstream storage providers
+- configure Resend, SMTP, or SendGrid mail delivery
+- configure sandbox, SSRF proxy, plugin daemon, marketplace, upload, datasource, Notion, Unstructured, Sentry, and OpenTelemetry settings
+- set `DIFY_AIO_PUBLIC_URL` for reverse-proxy deployments so Dify URL settings derive from one public base URL
+- put rare upstream-only variables in `/appdata/config/extra.env` instead of expanding the Unraid form with every possible knob; the file is parsed as `KEY=value` data and is not shell-sourced
 
-## Required Actions Secret
+Placeholder upstream defaults such as `your-bucket-name` are intentionally blanked in the CA template so external integrations fail closed until you provide real values.
 
-- `SYNC_TOKEN`
-  - fine-grained PAT
-  - repository access: `JSONbored/awesome-unraid`
-  - permission: `Contents: Read and write`
+## Runtime Notes
 
-## Files To Customize First
+- Dify is a heavier multi-service application. Plan for at least 2 CPU cores and 4 GiB RAM, with more memory for real workloads.
+- `/appdata` stores generated secrets, PostgreSQL data, Redis data, uploads, plugin daemon state, sandbox configuration, and local file storage.
+- Generated secrets are persisted under `/appdata/config/generated.env`. If a masked secret field is left blank, the container generates and reuses a value; if you set a value in the Unraid template, that explicit value takes precedence. `/appdata/config/extra.env` is parsed last as an advanced override file.
+- `CHECK_UPDATE_URL` is blank by default to avoid outbound update checks from privacy-focused or offline installs. Set it explicitly if you want Dify to check an update endpoint.
+- Changing `SECRET_KEY` after setup invalidates encrypted credentials and sessions.
+- The sandbox and SSRF proxy are included because they are part of the official self-hosted Dify topology. They reduce risk, but they do not make arbitrary code execution risk-free.
+- Public exposure should sit behind a trusted reverse proxy with TLS.
+- For serious deployments, back up `/appdata` and consider external PostgreSQL, Redis, and object storage when uptime or recovery matters.
 
-- [`Dockerfile`](/tmp/unraid-aio-template/Dockerfile)
-- [`template-aio.xml`](/tmp/unraid-aio-template/template-aio.xml)
-- [`pyproject.toml`](/tmp/unraid-aio-template/pyproject.toml)
-- [`tests/`](/tmp/unraid-aio-template/tests/)
-- [`scripts/validate-template.py`](/tmp/unraid-aio-template/scripts/validate-template.py)
-- [`scripts/update-template-changes.py`](/tmp/unraid-aio-template/scripts/update-template-changes.py)
-- [`scripts/components.py`](/tmp/unraid-aio-template/scripts/components.py)
-- [`rootfs/etc/cont-init.d/01-bootstrap.sh`](/tmp/unraid-aio-template/rootfs/etc/cont-init.d/01-bootstrap.sh)
-- [`rootfs/etc/services.d/app/run`](/tmp/unraid-aio-template/rootfs/etc/services.d/app/run)
-- [`README.md`](/tmp/unraid-aio-template/README.md)
-- [`.github/FUNDING.yml`](/tmp/unraid-aio-template/.github/FUNDING.yml)
-- [`SECURITY.md`](/tmp/unraid-aio-template/SECURITY.md)
-- [`upstream.toml`](/tmp/unraid-aio-template/upstream.toml)
+## Publishing and Releases
 
-## Validation Flow
+- Wrapper releases use the upstream version plus an AIO revision, such as `v1.11.0-aio.1`.
+- The repo monitors upstream releases and image digest changes through [upstream.toml](upstream.toml) and [scripts/check-upstream.py](scripts/check-upstream.py).
+- Release notes are generated with `git-cliff`.
+- The Unraid template `<Changes>` block is synced from `CHANGELOG.md` during release preparation.
+- `main` publishes `latest`, the pinned upstream version tag, an explicit AIO packaging line tag, and `sha-<commit>`.
+- When Docker Hub credentials are configured, the same publish flow pushes Docker Hub tags in parallel with GHCR so the CA template can use Docker Hub metadata and download counts.
+- The catalog XML should be synced into `awesome-unraid` only after the source template is finalized and validated here.
 
-Derived repos created from this template should follow this order:
+See [docs/releases.md](docs/releases.md) for the release workflow details.
 
-1. local placeholder cleanup
-2. `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt`
-3. `pytest tests/unit tests/template`
-4. `pytest tests/integration -m integration`
-5. `pytest tests/unit tests/template --junit-xml=reports/pytest-unit.xml -o junit_family=xunit1`
-6. `pytest tests/integration -m integration --junit-xml=reports/pytest-integration.xml -o junit_family=xunit1`
-7. `./trunk-analytics-cli validate --junit-paths "reports/pytest-unit.xml,reports/pytest-integration.xml"`
-8. enable automation
-9. CI validation and publish
-10. `awesome-unraid` sync using the repo-name-derived defaults or your optional overrides
-11. real Unraid install validation
+## Validation
 
-CI cost model for derived repos:
+Local validation is pytest-first:
 
-- run unit/template tests on relevant PRs and `main` pushes
-- run Docker-backed integration tests on build-relevant `main` pushes, on release-metadata `main` pushes that are still publish-eligible, and on manual workflow dispatches
-- require integration success before publish jobs can push images
-- keep local integration runs explicit instead of binding them to every pre-commit or pre-push hook by default
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements-dev.txt
+python3 scripts/validate-template.py
+python3 scripts/generate_dify_template.py --check
+pytest tests/unit tests/template
+pytest tests/integration -m integration
+```
 
-Use [`docs/release-checklist.md`](/tmp/unraid-aio-template/docs/release-checklist.md) before making a derived repo public or submitting it to CA.
+The integration suite builds a Linux amd64 image and boots the full container stack, so it is intentionally more expensive than the unit and XML checks.
 
-## Upstream Tracking
+Extended provider checks:
 
-Use [`docs/upstream-tracking.md`](/tmp/unraid-aio-template/docs/upstream-tracking.md) to wire the derived repo to the stable upstream app it wraps.
+```bash
+pytest tests/integration -m extended_integration
+```
 
-## Releases
+The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, MinIO-compatible S3 storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, SendGrid, workflow execution storage, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
 
-This template should use normal semver releases such as `v0.1.0`, not upstream-aligned app versions.
+The Unraid XML template is generated from `docs/upstream/dify.env.example` plus AIO-specific defaults. The generated XML is curated for Community Applications usability, while `rootfs/opt/dify-aio/upstream-env-vars.txt` still tracks the full upstream variable list for blank-value normalization and drift checks. When Dify updates its upstream environment surface, refresh the fixture, run `python3 scripts/generate_dify_template.py`, and then run validation.
 
-See [`docs/releases.md`](/tmp/unraid-aio-template/docs/releases.md) for the protected-branch-safe release workflow and changelog process.
+## Support
+
+- Repo issues: [JSONbored/dify-aio issues](https://github.com/JSONbored/dify-aio/issues)
+- Upstream app: [langgenius/dify](https://github.com/langgenius/dify)
+- Self-hosted install docs: [docs.dify.ai](https://docs.dify.ai/en/self-host/quick-start/docker-compose)
+- Release notes: [Dify releases](https://github.com/langgenius/dify/releases)
+
+## Funding
+
+If this work saves you time, support it here:
+
+- [GitHub Sponsors](https://github.com/sponsors/JSONbored)
+- [Ko-fi](https://ko-fi.com/jsonbored)
+- [Buy Me a Coffee](https://buymeacoffee.com/jsonbored)
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=JSONbored/unraid-aio-template&type=date&legend=top-left)](https://www.star-history.com/#JSONbored/unraid-aio-template&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=JSONbored/dify-aio&theme=dark)](https://star-history.com/#JSONbored/dify-aio&Date)

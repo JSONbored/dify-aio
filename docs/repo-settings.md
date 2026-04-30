@@ -79,7 +79,7 @@ Default sync behavior without overrides:
 - awesome-unraid target repo: `JSONbored/awesome-unraid`
 - target XML name: `<repo-name>.xml`
 - target icon path source: `assets/app-icon.png`
-- target icon name: derived from the XML name, for example `yourapp-aio.xml -> yourapp.png`
+- target icon name: derived from the XML name, for example `dify-aio.xml -> dify.png`
 
 ## Maintenance
 
@@ -89,7 +89,7 @@ Default sync behavior without overrides:
 
 ## Derived Repo Checks Before Enabling Automation
 
-- `template-aio.xml` has been renamed
+- `dify-aio.xml` is the only root XML template
 - starter base image comment is gone
 - upstream version is pinned explicitly instead of relying on a floating stable tag
 - integration tests assert the real readiness signal and health endpoint

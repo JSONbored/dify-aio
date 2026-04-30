@@ -1,0 +1,14 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+configure_dify_env
+
+if ! is_true "${DIFY_ENABLE_SANDBOX:-true}"; then
+	aio_log "Dify sandbox disabled; code execution features will not work."
+	exec sleep infinity
+fi
+
+exec /opt/dify-aio/bin/run-sandbox

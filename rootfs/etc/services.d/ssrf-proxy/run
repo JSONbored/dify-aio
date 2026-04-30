@@ -1,0 +1,14 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+configure_dify_env
+
+mkdir -p /var/log/squid /var/spool/squid
+chown -R proxy:proxy /var/log/squid /var/spool/squid
+envsubst < /opt/dify-aio/squid/squid.conf.template > /etc/squid/squid.conf
+
+/usr/sbin/squid -Nz
+exec /usr/sbin/squid -f /etc/squid/squid.conf -NYC

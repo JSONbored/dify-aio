@@ -1,0 +1,20 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+configure_dify_env
+
+wait_for_tcp "${DB_HOST}" "${DB_PORT}" "PostgreSQL"
+wait_for_tcp "${REDIS_HOST}" "${REDIS_PORT}" "Redis"
+if is_true "${DIFY_ENABLE_SANDBOX:-true}"; then
+	wait_for_http_url "http://127.0.0.1:${SANDBOX_PORT}/health" "Dify sandbox"
+fi
+
+export MODE=api
+export MIGRATION_ENABLED="${MIGRATION_ENABLED:-true}"
+export INNER_API_KEY_FOR_PLUGIN="${PLUGIN_DIFY_INNER_API_KEY}"
+
+cd /app/api
+exec /entrypoint.sh

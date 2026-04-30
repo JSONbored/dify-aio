@@ -12,20 +12,19 @@ Without upstream monitoring, each AIO repo becomes a manual memory problem. The 
 
 ## Files
 
-- [`upstream.toml`](/tmp/unraid-aio-template/upstream.toml)
-- [`scripts/check-upstream.py`](/tmp/unraid-aio-template/scripts/check-upstream.py)
-- [`.github/workflows/check-upstream.yml`](/tmp/unraid-aio-template/.github/workflows/check-upstream.yml)
+- [`upstream.toml`](../upstream.toml)
+- [`scripts/check-upstream.py`](../scripts/check-upstream.py)
+- [`.github/workflows/check-upstream.yml`](../.github/workflows/check-upstream.yml)
 
 ## Recommended Default
 
-Use stable-only monitoring with `strategy = "pr"`.
+Use stable-only monitoring with `strategy = "notify"` until the update workflow can refresh all Dify companion image digests together.
 
 That means the repo:
 
 - checks upstream on a schedule
-- opens a PR when a new stable version appears
-- runs the normal validation and pytest flow
-- leaves the final merge decision to you
+- opens an issue when a new stable version appears
+- leaves the digest refresh and validation pass explicit
 
 ## Supported Upstream Types
 
@@ -35,41 +34,38 @@ That means the repo:
 
 ## Optional Digest Pinning
 
-When the wrapped upstream publishes immutable image manifests, you can track both the human version and the exact image digest. This is the right fit for repos that pin `FROM upstream-image:<tag>@sha256:<digest>` and want upstream-monitor PRs to catch digest-only refreshes too.
+When the wrapped upstream publishes immutable image manifests, you can track both the human version and the exact image digest. Dify uses multiple companion images, so digest updates should be handled as one explicit release task instead of allowing the single-image monitor to update only one digest.
 
 Example:
 
 ```toml
 [upstream]
-name = "Infisical"
+name = "Dify"
 type = "github-release"
-repo = "Infisical/infisical"
-image = "infisical/infisical"
+repo = "langgenius/dify"
 version_source = "dockerfile-arg"
-version_key = "UPSTREAM_VERSION"
-digest_source = "dockerhub-manifest"
-digest_key = "UPSTREAM_IMAGE_DIGEST"
-strategy = "pr"
+version_key = "UPSTREAM_DIFY_VERSION"
+strategy = "notify"
 stable_only = true
 
 [notifications]
-release_notes_url = "https://github.com/Infisical/infisical/releases"
+release_notes_url = "https://github.com/langgenius/dify/releases"
 ```
 
 ## Example
 
 ```toml
 [upstream]
-name = "Sure"
-type = "github-tag"
-repo = "we-promise/sure"
+name = "Dify"
+type = "github-release"
+repo = "langgenius/dify"
 version_source = "dockerfile-arg"
-version_key = "UPSTREAM_VERSION"
-strategy = "pr"
+version_key = "UPSTREAM_DIFY_VERSION"
+strategy = "notify"
 stable_only = true
 
 [notifications]
-release_notes_url = "https://github.com/we-promise/sure/releases"
+release_notes_url = "https://github.com/langgenius/dify/releases"
 ```
 
 ## Version Pinning Pattern
@@ -77,8 +73,9 @@ release_notes_url = "https://github.com/we-promise/sure/releases"
 Pin the wrapped upstream version explicitly in the Dockerfile:
 
 ```dockerfile
-ARG UPSTREAM_VERSION=v0.6.8
-FROM ghcr.io/we-promise/sure:${UPSTREAM_VERSION}
+ARG UPSTREAM_DIFY_VERSION=1.14.0
+ARG UPSTREAM_DIFY_API_DIGEST=sha256:...
+FROM langgenius/dify-api:${UPSTREAM_DIFY_VERSION}@${UPSTREAM_DIFY_API_DIGEST}
 ```
 
 This gives the upstream monitor a concrete value to compare and update.

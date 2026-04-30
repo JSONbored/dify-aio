@@ -1,4 +1,4 @@
-name: CI / Template
+name: CI / Dify AIO
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
       - cliff.toml
       - pyproject.toml
       - requirements-dev.txt
+      - docs/upstream/**
       - "*.xml"
       - assets/**
       - rootfs/**
@@ -29,6 +30,7 @@ on:
       - cliff.toml
       - pyproject.toml
       - requirements-dev.txt
+      - docs/upstream/**
       - "*.xml"
       - assets/**
       - rootfs/**
@@ -41,15 +43,22 @@ on:
       - components/**
       - renovate.json
       - .github/workflows/**
+  # checkov:skip=CKV_GHA_7: Manual dispatch input only controls the optional extended integration matrix.
   workflow_dispatch:
+    inputs:
+      run_extended_integration:
+        description: Run sidecar-backed external provider integration tests
+        required: false
+        default: false
+        type: boolean
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: jsonbored/dify-aio
   PYTHON_VERSION: "3.13"
   TRUNK_ORG_URL_SLUG: aethereal
-  DOCKER_CACHE_SCOPE: unraid-aio-template-image
+  DOCKER_CACHE_SCOPE: dify-aio-image
 
 permissions:
   contents: read
@@ -151,10 +160,10 @@ jobs:
           while IFS= read -r path; do
             [[ -z "${path}" ]] && continue
             case "${path}" in
-              Dockerfile|pyproject.toml|requirements-dev.txt|upstream.toml|components.toml|components/*|rootfs/*|tests/*)
+              Dockerfile|pyproject.toml|requirements-dev.txt|upstream.toml|components.toml|components/*|rootfs/*|tests/*|docs/upstream/*)
                 build_related=true
                 ;;
-              template-aio.xml|assets/*)
+              *.xml|assets/*)
                 xml_related=true
                 ;;
               CHANGELOG.md|cliff.toml|scripts/*|.trunk/*)
@@ -200,12 +209,13 @@ jobs:
         if: ${{ needs.detect-changes.outputs.build_related == 'true' || needs.detect-changes.outputs.tooling_related == 'true' }}
         run: |
           bash -n scripts/validate-derived-repo.sh
-          PYTHONPYCACHEPREFIX=/tmp/unraid-aio-template-pyc python3 -m py_compile scripts/ci_flags.py
-          PYTHONPYCACHEPREFIX=/tmp/unraid-aio-template-pyc python3 -m py_compile scripts/check-upstream.py
-          PYTHONPYCACHEPREFIX=/tmp/unraid-aio-template-pyc python3 -m py_compile scripts/components.py
-          PYTHONPYCACHEPREFIX=/tmp/unraid-aio-template-pyc python3 -m py_compile scripts/validate-template.py
-          PYTHONPYCACHEPREFIX=/tmp/unraid-aio-template-pyc python3 -m py_compile scripts/update-template-changes.py
-          PYTHONPYCACHEPREFIX=/tmp/unraid-aio-template-pyc python3 -m py_compile scripts/release.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/ci_flags.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/check-upstream.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/components.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/generate_dify_template.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/validate-template.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/update-template-changes.py
+          PYTHONPYCACHEPREFIX=/tmp/dify-aio-pyc python3 -m py_compile scripts/release.py
           find rootfs -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           find rootfs -type f -path '*/run' -print0 | xargs -0 -n1 bash -n
 
@@ -358,7 +368,7 @@ jobs:
           context: .
           platforms: linux/amd64
           load: true
-          tags: aio-template:pytest
+          tags: dify-aio:pytest
           cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}
           cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}
 
@@ -372,6 +382,59 @@ jobs:
         with:
           junit-path: reports/pytest-integration.xml
           pytest-args: tests/integration -m integration
+          trunk-api-token: ${{ env.TRUNK_API_TOKEN }}
+          trunk-org-slug: ${{ env.TRUNK_ORG_URL_SLUG }}
+
+      - name: Dump Docker diagnostics
+        if: ${{ failure() }}
+        run: |
+          docker ps -a
+          echo
+          docker images
+
+  extended-integration-tests:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_extended_integration == true && needs.detect-changes.outputs.build_related == 'true' && needs.integration-tests.result == 'success' }}
+    needs:
+      - detect-changes
+      - validate-template
+      - pinned-actions
+      - unit-tests
+      - integration-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TRUNK_API_TOKEN: ${{ secrets.TRUNK_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Prebuild pytest image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: dify-aio:pytest
+          cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}
+          cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}
+
+      - name: Install pytest
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run extended integration tests
+        env:
+          AIO_PYTEST_USE_PREBUILT_IMAGE: "true"
+        uses: ./.github/actions/run-pytest
+        with:
+          junit-path: reports/pytest-extended-integration.xml
+          pytest-args: tests/integration -m extended_integration
           trunk-api-token: ${{ env.TRUNK_API_TOKEN }}
           trunk-org-slug: ${{ env.TRUNK_ORG_URL_SLUG }}
 
@@ -411,16 +474,96 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve Docker Hub publish settings
+        id: dockerhub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE_NAME }}
+          DOCKERHUB_IMAGE_NAME_SECRET: ${{ secrets.DOCKERHUB_IMAGE_NAME }}
+        run: |
+          if [[ -n "${DOCKERHUB_USERNAME}" && -n "${DOCKERHUB_TOKEN}" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          resolved_image_name="${DOCKERHUB_IMAGE_NAME:-${DOCKERHUB_IMAGE_NAME_SECRET}}"
+          if [[ -n "${resolved_image_name}" ]]; then
+            echo "image_name=${resolved_image_name}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "image_name=${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Login to Docker Hub
+        if: ${{ steps.dockerhub.outputs.enabled == 'true' }}
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Compute image tags
         id: prep
+        env:
+          DOCKERHUB_ENABLED: ${{ steps.dockerhub.outputs.enabled }}
+          DOCKERHUB_IMAGE_NAME: ${{ steps.dockerhub.outputs.image_name }}
         run: |
-          image="$(printf '%s' "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
-          sha_tag="${image}:sha-${GITHUB_SHA}"
+          image_ghcr="$(printf '%s' "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
+          dockerhub_image_name="${DOCKERHUB_IMAGE_NAME:-${IMAGE_NAME}}"
+          image_dockerhub="$(printf '%s' "${dockerhub_image_name}" | tr '[:upper:]' '[:lower:]')"
+          sha_tag_ghcr="${image_ghcr}:sha-${GITHUB_SHA}"
+          upstream_version="$(python3 scripts/release.py upstream-version)"
+          upstream_api_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_API_DIGEST=//p' Dockerfile | head -n1)"
+          upstream_web_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_WEB_DIGEST=//p' Dockerfile | head -n1)"
+          upstream_sandbox_version="$(sed -n 's/^ARG UPSTREAM_DIFY_SANDBOX_VERSION=//p' Dockerfile | head -n1)"
+          upstream_sandbox_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_SANDBOX_DIGEST=//p' Dockerfile | head -n1)"
+          upstream_plugin_daemon_version="$(sed -n 's/^ARG UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION=//p' Dockerfile | head -n1)"
+          upstream_plugin_daemon_digest="$(sed -n 's/^ARG UPSTREAM_DIFY_PLUGIN_DAEMON_DIGEST=//p' Dockerfile | head -n1)"
+          changelog_version="$(python3 scripts/release.py latest-changelog-version 2>/dev/null || true)"
+          release_commit_pattern="^chore\\(release\\): $(python3 -c 'import re, sys; print(re.escape(sys.argv[1]))' "${changelog_version}")( \\(#[0-9]+\\))?$"
+          commit_message="$(git log -1 --pretty=%B)"
+          release_package_tag=""
+          version_label="${upstream_version}"
+          wrapper_track="main"
+          case "${changelog_version}" in
+            "${upstream_version}"-aio.*)
+              candidate_revision="${changelog_version##*.}"
+              if [[ "${candidate_revision}" =~ ^[0-9]+$ ]] && printf '%s\n' "${commit_message}" | grep -Eq "${release_commit_pattern}"; then
+                release_package_tag="${changelog_version}"
+                version_label="${release_package_tag}"
+                wrapper_track="aio-v${candidate_revision}"
+              fi
+              ;;
+          esac
 
           {
+            echo "upstream_version=${upstream_version}"
+            echo "upstream_api_digest=${upstream_api_digest}"
+            echo "upstream_web_digest=${upstream_web_digest}"
+            echo "upstream_sandbox_version=${upstream_sandbox_version}"
+            echo "upstream_sandbox_digest=${upstream_sandbox_digest}"
+            echo "upstream_plugin_daemon_version=${upstream_plugin_daemon_version}"
+            echo "upstream_plugin_daemon_digest=${upstream_plugin_daemon_digest}"
+            echo "release_package_tag=${release_package_tag}"
+            echo "version_label=${version_label}"
+            echo "wrapper_track=${wrapper_track}"
             echo "tags<<EOF"
-            echo "${image}:latest"
-            echo "${sha_tag}"
+            echo "${image_ghcr}:latest"
+            echo "${image_ghcr}:${upstream_version}"
+            if [[ -n "${release_package_tag}" ]]; then
+              echo "${image_ghcr}:${release_package_tag}"
+            fi
+            echo "${sha_tag_ghcr}"
+
+            if [[ "${DOCKERHUB_ENABLED}" == "true" ]]; then
+              echo "${image_dockerhub}:latest"
+              echo "${image_dockerhub}:${upstream_version}"
+              if [[ -n "${release_package_tag}" ]]; then
+                echo "${image_dockerhub}:${release_package_tag}"
+              fi
+              echo "${image_dockerhub}:sha-${GITHUB_SHA}"
+            fi
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
@@ -433,6 +576,22 @@ jobs:
           cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}
           cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}
           tags: ${{ steps.prep.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/JSONbored/dify-aio
+            org.opencontainers.image.title=dify-aio
+            org.opencontainers.image.version=${{ steps.prep.outputs.version_label || '' }}
+            org.opencontainers.image.description=Unraid-first AIO wrapper image for Dify
+            io.jsonbored.upstream.name=Dify
+            io.jsonbored.upstream.dify.version=${{ steps.prep.outputs.upstream_version || '' }}
+            io.jsonbored.upstream.dify.api.digest=${{ steps.prep.outputs.upstream_api_digest || '' }}
+            io.jsonbored.upstream.dify.web.digest=${{ steps.prep.outputs.upstream_web_digest || '' }}
+            io.jsonbored.upstream.dify_sandbox.version=${{ steps.prep.outputs.upstream_sandbox_version || '' }}
+            io.jsonbored.upstream.dify_sandbox.digest=${{ steps.prep.outputs.upstream_sandbox_digest || '' }}
+            io.jsonbored.upstream.dify_plugin_daemon.version=${{ steps.prep.outputs.upstream_plugin_daemon_version || '' }}
+            io.jsonbored.upstream.dify_plugin_daemon.digest=${{ steps.prep.outputs.upstream_plugin_daemon_digest || '' }}
+            io.jsonbored.wrapper.name=dify-aio
+            io.jsonbored.wrapper.type=unraid-aio
+            io.jsonbored.wrapper.track=${{ steps.prep.outputs.wrapper_track || '' }}
 
   sync-awesome-unraid:
     if: ${{ needs.detect-changes.outputs.xml_related == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
@@ -444,11 +603,11 @@ jobs:
     permissions:
       contents: read
     env:
-      TEMPLATE_XML: ${{ vars.TEMPLATE_XML || 'template-aio.xml' }}
+      TEMPLATE_XML: ${{ vars.TEMPLATE_XML || 'dify-aio.xml' }}
       TEMPLATE_ICON_PATH: ${{ vars.TEMPLATE_ICON_PATH || 'assets/app-icon.png' }}
       TARGET_REPOSITORY: ${{ vars.AWESOME_UNRAID_REPOSITORY || 'JSONbored/awesome-unraid' }}
-      TARGET_XML_NAME: ${{ vars.AWESOME_UNRAID_XML_NAME || 'template-aio.xml' }}
-      TARGET_ICON_NAME: ${{ vars.AWESOME_UNRAID_ICON_NAME || 'template.png' }}
+      TARGET_XML_NAME: ${{ vars.AWESOME_UNRAID_XML_NAME || 'dify-aio.xml' }}
+      TARGET_ICON_NAME: ${{ vars.AWESOME_UNRAID_ICON_NAME || 'dify.png' }}
     steps:
       - name: Check sync configuration
         env:
@@ -473,7 +632,7 @@ jobs:
           token: ${{ secrets.SYNC_TOKEN }}
           path: target-repo
 
-      - name: Copy and Commit Template
+      - name: Copy and commit catalog assets
         if: ${{ env.SYNC_ENABLED == 'true' }}
         run: |
           cp "${TEMPLATE_XML}" "target-repo/${TARGET_XML_NAME}"
@@ -489,8 +648,8 @@ jobs:
           set -euo pipefail
 
           cd target-repo
-          branch="sync-awesome-unraid/unraid-aio-template"
-          title="chore: sync template assets"
+          branch="sync-awesome-unraid/dify-aio"
+          title="ci(sync): sync dify-aio catalog assets"
           body="Automated sync from \`${SOURCE_REPOSITORY}\`."
 
           if [[ -z "$(git status --porcelain -- "${TARGET_XML_NAME}" "icons/${TARGET_ICON_NAME}")" ]]; then
@@ -503,7 +662,7 @@ jobs:
 
           git checkout -B "${branch}"
           git add "${TARGET_XML_NAME}" "icons/${TARGET_ICON_NAME}"
-          git commit -m "chore: auto-sync template assets"
+          git commit -m "ci(sync): auto-sync dify-aio assets"
           git push --force origin "HEAD:${branch}"
 
           existing_pr="$(gh pr list \

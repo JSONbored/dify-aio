@@ -70,7 +70,11 @@ def create_docker_volume(prefix: str) -> str:
 
 
 def remove_docker_volume(volume_name: str) -> None:
-    run_command(["docker", "volume", "rm", "-f", volume_name], check=False)
+    for _ in range(5):
+        result = run_command(["docker", "volume", "rm", "-f", volume_name], check=False)
+        if result.returncode == 0:
+            return
+        time.sleep(1)
 
 
 @contextmanager
@@ -82,12 +86,121 @@ def docker_volume(prefix: str) -> Iterator[str]:
         remove_docker_volume(volume_name)
 
 
+def create_docker_network(prefix: str) -> str:
+    network_name = f"{prefix}-{uuid.uuid4().hex[:10]}"
+    run_command(["docker", "network", "create", network_name])
+    return network_name
+
+
+def remove_docker_network(network_name: str) -> None:
+    run_command(["docker", "network", "rm", network_name], check=False)
+
+
+@contextmanager
+def docker_network(prefix: str) -> Iterator[str]:
+    network_name = create_docker_network(prefix)
+    try:
+        yield network_name
+    finally:
+        remove_docker_network(network_name)
+
+
 def docker_exec(
     container_name: str, command: str, *, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
     return run_command(
         ["docker", "exec", container_name, "sh", "-lc", command], check=check
     )
+
+
+def docker_logs(container_name: str) -> str:
+    result = run_command(["docker", "logs", container_name], check=False)
+    return result.stdout + result.stderr
+
+
+def wait_for_container_command(
+    container_name: str,
+    command: str,
+    *,
+    timeout: int = 120,
+    interval: int = 2,
+) -> None:
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        result = docker_exec(container_name, command, check=False)
+        if result.returncode == 0:
+            return
+
+        running = run_command(
+            ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
+            check=False,
+        ).stdout.strip()
+        if running == "false":
+            raise AssertionError(
+                f"{container_name} stopped while waiting for command: {command}\n"
+                f"Logs:\n{docker_logs(container_name)}"
+            )
+        time.sleep(interval)
+
+    raise AssertionError(
+        f"{container_name} did not satisfy command before timeout: {command}\n"
+        f"Logs:\n{docker_logs(container_name)}"
+    )
+
+
+def wait_for_host_http(url: str, *, timeout: int = 120, interval: int = 2) -> None:
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        result = run_command(["curl", "-fsS", url], check=False)
+        if result.returncode == 0:
+            return
+        time.sleep(interval)
+
+    raise AssertionError(f"HTTP endpoint did not become ready: {url}")
+
+
+@contextmanager
+def sidecar_container(
+    prefix: str,
+    image: str,
+    *,
+    network: str,
+    command_args: list[str] | None = None,
+    env: dict[str, str] | None = None,
+    network_alias: str | None = None,
+    platform: str | None = "linux/amd64",
+    ports: dict[int, int] | None = None,
+) -> Iterator[str]:
+    name = f"{prefix}-{uuid.uuid4().hex[:10]}"
+    command = ["docker", "run", "-d", "--name", name]
+
+    if platform:
+        command.extend(["--platform", platform])
+
+    command.extend(["--network", network])
+
+    if network_alias:
+        command.extend(["--network-alias", network_alias])
+
+    if ports:
+        for host_port, container_port in ports.items():
+            command.extend(["-p", f"127.0.0.1:{host_port}:{container_port}"])
+
+    if env:
+        for key, value in env.items():
+            command.extend(["-e", f"{key}={value}"])
+
+    command.append(image)
+    if command_args:
+        command.extend(command_args)
+
+    run_command(command)
+    try:
+        yield name
+    finally:
+        run_command(["docker", "rm", "-f", name], check=False)
 
 
 def container_path_exists(container_name: str, path: str) -> bool:
@@ -134,13 +247,17 @@ class DockerRuntime:
     def container(
         self,
         *,
+        appdata_volume: str | None = None,
         env_overrides: dict[str, str] | None = None,
+        extra_args: list[str] | None = None,
+        network: str | None = None,
     ) -> Iterator["ContainerHandle"]:
         suffix = uuid.uuid4().hex[:10]
-        name = f"aio-template-pytest-{suffix}"
+        name = f"dify-aio-pytest-{suffix}"
         http_port = reserve_host_port()
-        config_volume = create_docker_volume(f"{name}-config")
-        data_volume = create_docker_volume(f"{name}-data")
+        remove_appdata_volume = appdata_volume is None
+        if appdata_volume is None:
+            appdata_volume = create_docker_volume(f"{name}-appdata")
         try:
             command = [
                 "docker",
@@ -153,10 +270,14 @@ class DockerRuntime:
                 "-p",
                 f"{http_port}:8080",
                 "-v",
-                f"{config_volume}:/config",
-                "-v",
-                f"{data_volume}:/data",
+                f"{appdata_volume}:/appdata",
             ]
+
+            if network:
+                command.extend(["--network", network])
+
+            if extra_args:
+                command.extend(extra_args)
 
             if env_overrides:
                 for key, value in env_overrides.items():
@@ -168,16 +289,15 @@ class DockerRuntime:
                 runtime=self,
                 name=name,
                 http_port=http_port,
-                config_volume=config_volume,
-                data_volume=data_volume,
+                appdata_volume=appdata_volume,
             )
             try:
                 yield handle
             finally:
                 self.remove(name)
         finally:
-            remove_docker_volume(config_volume)
-            remove_docker_volume(data_volume)
+            if remove_appdata_volume:
+                remove_docker_volume(appdata_volume)
 
 
 class ContainerHandle:
@@ -187,14 +307,12 @@ class ContainerHandle:
         runtime: DockerRuntime,
         name: str,
         http_port: int,
-        config_volume: str,
-        data_volume: str,
+        appdata_volume: str,
     ) -> None:
         self.runtime = runtime
         self.name = name
         self.http_port = http_port
-        self.config_volume = config_volume
-        self.data_volume = data_volume
+        self.appdata_volume = appdata_volume
 
     def logs(self) -> str:
         return self.runtime.logs(self.name)
