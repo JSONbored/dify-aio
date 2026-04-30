@@ -8,7 +8,7 @@ Unraid-first AIO wrapper for [Dify](https://github.com/langgenius/dify), an open
 
 ## Status
 
-This repository is pre-release. The source template, generated XML, and local container boot path are covered by pytest-backed validation. Community Applications submission is intentionally separate and should happen only after the source template is finalized.
+This repository is release-ready for Community Applications. The source template, generated XML, catalog assets, and local container boot path are covered by pytest-backed validation, with extended integration checks available for external PostgreSQL, Redis, vector, object-storage, SMTP, and advanced provider settings.
 
 ## What This Image Includes
 
@@ -74,7 +74,7 @@ Placeholder upstream defaults such as `your-bucket-name` are intentionally blank
 - The Unraid template `<Changes>` block is synced from `CHANGELOG.md` during release preparation.
 - `main` publishes `latest`, the pinned upstream version tag, an explicit AIO packaging line tag, and `sha-<commit>`.
 - When Docker Hub credentials are configured, the same publish flow pushes Docker Hub tags in parallel with GHCR so the CA template can use Docker Hub metadata and download counts.
-- The catalog XML should be synced into `awesome-unraid` only after the source template is finalized and validated here.
+- The catalog XML is synced into `awesome-unraid` from this source repo after template validation passes.
 
 See [docs/releases.md](docs/releases.md) for the release workflow details.
 
