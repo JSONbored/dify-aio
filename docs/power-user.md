@@ -59,7 +59,7 @@ After refreshing `docs/upstream/dify.env.example`, run:
 
 ```sh
 python3 scripts/generate_dify_template.py
-python3 scripts/validate-template.py
+cd ../aio-fleet && python -m aio_fleet validate --repo dify-aio
 pytest tests/unit tests/template
 ```
 

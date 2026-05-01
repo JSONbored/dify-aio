@@ -43,12 +43,12 @@ Do not dump every upstream Dify environment variable into `dify-aio.xml`. The XM
 - [`rootfs/opt/dify-aio/lib/env.sh`](../rootfs/opt/dify-aio/lib/env.sh)
 - [`rootfs/etc/services.d`](../rootfs/etc/services.d)
 - [`tests/integration/test_container_runtime.py`](../tests/integration/test_container_runtime.py)
-- [`upstream.toml`](../upstream.toml)
+- [`.aio-fleet.yml`](../.aio-fleet.yml)
 
 ## Validation Order
 
 1. `python3 scripts/generate_dify_template.py --check`
-2. `python3 scripts/validate-template.py`
+2. from `aio-fleet`: `python -m aio_fleet validate --repo dify-aio`
 3. `pytest tests/unit tests/template`
 4. `pytest tests/integration -m integration`
 5. install from the generated XML in a clean Unraid environment
@@ -57,4 +57,4 @@ Do not dump every upstream Dify environment variable into `dify-aio.xml`. The XM
 
 ## Current Known Follow-Up
 
-The upstream monitor is intentionally `strategy = "notify"` because Dify uses multiple pinned upstream image digests. Do not switch it to automatic PR updates until the workflow can refresh all companion image digests in the same change.
+The upstream monitor is intentionally notify-style because Dify uses multiple pinned upstream image digests. Do not switch it to automatic PR updates until `aio-fleet` can refresh all companion image digests in the same change.

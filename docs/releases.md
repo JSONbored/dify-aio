@@ -10,7 +10,7 @@
 
 ## Published Image Tags
 
-Every `main` build publishes:
+Every central `aio-fleet` publish for `main` publishes:
 
 - `latest`
 - the exact pinned upstream Dify version
@@ -29,12 +29,11 @@ A release means the wrapper has been validated against a specific upstream Dify 
 
 ## Release Flow
 
-1. Trigger **Prepare Release / Dify AIO** from `main`.
-2. The workflow computes the next `upstream-aio.N` version, updates `CHANGELOG.md`, syncs the XML `<Changes>` block, and opens a release PR.
+1. From `aio-fleet`, run `python -m aio_fleet release status --repo dify-aio` to inspect the next release.
+2. Run `python -m aio_fleet release prepare --repo dify-aio` on a release branch, then open a `chore(release): <version>` PR.
 3. Review and merge that PR into `main`.
-4. Wait for the `CI / Dify AIO` run on the release target commit to finish green. That same `main` push also publishes the updated package tags automatically.
-5. Trigger **Publish Release / Dify AIO** from `main`.
-6. The workflow verifies CI on the exact release target commit, creates the Git tag if needed, and publishes the GitHub Release.
+4. Run the central `aio-fleet` control check for the release target commit with publish enabled, and require `aio-fleet / required` to pass.
+5. Run `python -m aio_fleet release publish --repo dify-aio` from `aio-fleet` to create the GitHub Release.
 
 ## Deep Provider Validation
 
