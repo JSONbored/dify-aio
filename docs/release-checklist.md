@@ -11,7 +11,7 @@
 - confirm `.aio-fleet.yml` matches the central `aio-fleet` manifest
 - add a screenshot or demo visual if the app has a UI
 - set the repo About description, topics, and social preview image
-- run `pytest tests/unit tests/template`
+- run `pytest tests/template`
 - run `pytest tests/integration -m integration`
 - run `pytest tests/integration -m extended_integration` before public submission or major upstream/config changes
 

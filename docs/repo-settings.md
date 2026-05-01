@@ -70,5 +70,5 @@ App repos should not carry repo-local workflow secrets for shared automation. Co
 - integration tests assert the real readiness signal and health endpoint
 - README no longer contains placeholder language
 - XML points at the correct repo, icon, and support URLs
-- `pytest tests/unit tests/template` passes locally, including the placeholder and XML checks
+- `pytest tests/template` passes locally for app-specific template policy checks
 - `.aio-fleet.yml` matches the central `aio-fleet` manifest and Dify update strategy
