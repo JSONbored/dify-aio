@@ -26,11 +26,7 @@ Create a ruleset for `main`:
 
 Suggested required checks:
 
-- `validate-template`
-- `pinned-actions`
-- `dependency-review`
-- `unit-tests`
-- `integration-tests`
+- `aio-fleet / required`
 
 ## Actions
 
@@ -40,7 +36,7 @@ Suggested required checks:
 - Allow GitHub-authored actions and verified creators
 - Keep default `GITHUB_TOKEN` permissions minimal and only elevate inside jobs that publish
 - Keep manual dispatch enabled so you can re-run validation or a controlled publish without making a noop commit
-- Keep scheduled workflows enabled so upstream monitoring can run automatically
+- Keep the central `aio-fleet` scheduled workflow enabled so upstream monitoring can run automatically
 
 ## Security
 
@@ -49,7 +45,7 @@ Suggested required checks:
 - Enable push protection
 - Enable private vulnerability reporting
 - Enable code scanning later if you add a relevant analyzer
-- Use Renovate for update PRs instead of Dependabot update PRs
+- Keep shared dependency and upstream policy in `aio-fleet`
 
 ## Packages
 
@@ -58,34 +54,13 @@ Suggested required checks:
 
 ## Secrets and Variables
 
-No Actions variables are required by default.
-
-Optional variables:
-
-- `IMAGE_NAME_OVERRIDE`
-- `TEMPLATE_XML`
-- `AWESOME_UNRAID_REPOSITORY`
-- `AWESOME_UNRAID_XML_NAME`
-- `AWESOME_UNRAID_ICON_NAME`
-- `TEMPLATE_ICON_PATH`
-
-Required secret:
-
-- `SYNC_TOKEN`
-
-Default sync behavior without overrides:
-
-- XML source: `<repo-name>.xml`
-- awesome-unraid target repo: `JSONbored/awesome-unraid`
-- target XML name: `<repo-name>.xml`
-- target icon path source: `assets/app-icon.png`
-- target icon name: derived from the XML name, for example `dify-aio.xml -> dify.png`
+App repos should not carry repo-local workflow secrets for shared automation. Configure the GitHub App, Docker Hub credentials, and GHCR token in `aio-fleet`; keep app-local secrets only when the runtime itself needs them.
 
 ## Maintenance
 
-- install the Renovate GitHub App on each derived repo
-- let Renovate manage pinned GitHub Action SHAs and Docker dependency updates
-- review Renovate PRs manually before merging
+- keep shared dependency and upstream policy in `aio-fleet`
+- let `aio-fleet` own shared workflow, Trunk, and upstream automation
+- review generated automation PRs manually before merging
 
 ## Derived Repo Checks Before Enabling Automation
 
@@ -96,4 +71,4 @@ Default sync behavior without overrides:
 - README no longer contains placeholder language
 - XML points at the correct repo, icon, and support URLs
 - `pytest tests/unit tests/template` passes locally, including the placeholder and XML checks
-- `upstream.toml` matches the real upstream app and update strategy
+- `.aio-fleet.yml` matches the central `aio-fleet` manifest and Dify update strategy

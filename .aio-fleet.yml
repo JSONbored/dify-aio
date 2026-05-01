@@ -13,25 +13,56 @@ release:
   previous_tag_command: latest-aio-tag
 upstream:
   name: Dify
+  version_key: UPSTREAM_DIFY_VERSION
   digest_arg: UPSTREAM_IMAGE_DIGEST
 template:
   xml_paths:
-  - '*.xml'
-  - assets/**
+    - "*.xml"
+    - assets/**
   generated: true
   generator_check_command: python3 scripts/generate_dify_template.py --check
 catalog:
   published: true
   assets:
-  - source: dify-aio.xml
-    target: dify-aio.xml
-  - source: assets/app-icon.png
-    target: icons/dify.png
+    - source: dify-aio.xml
+      target: dify-aio.xml
+    - source: assets/app-icon.png
+      target: icons/dify.png
 tests:
-  unit: tests/unit tests/template
+  unit: tests/template
   integration: tests/integration -m integration
   extended_integration:
     input_name: run_extended_integration
     description: Run sidecar-backed external provider integration tests
     pytest_args: tests/integration -m extended_integration
   checkout_submodules: false
+validation:
+  required_targets:
+    - /appdata
+    - "8080"
+    - DB_SSL_MODE
+    - DEPLOY_ENV
+    - DIFY_AIO_EXTRA_ENV_FILE
+    - DIFY_AIO_PUBLIC_URL
+    - DIFY_AIO_WAIT_TIMEOUT_SECONDS
+    - DIFY_BIND_ADDRESS
+    - DIFY_ENABLE_SANDBOX
+    - DIFY_USE_INTERNAL_POSTGRES
+    - DIFY_USE_INTERNAL_REDIS
+    - DIFY_WEB_HOST
+    - DIFY_WEB_PORT
+    - NEXT_TELEMETRY_DISABLED
+    - PIP_MIRROR_URL
+    - PLUGIN_DEBUGGING_HOST
+    - PLUGIN_DEBUGGING_PORT
+    - PLUGIN_MAX_PACKAGE_SIZE
+    - PLUGIN_PLATFORM
+    - SENDGRID_API_KEY
+    - TZ
+    - WORKFLOW_NODE_EXECUTION_STORAGE
+  required_text_fields:
+    - ReadMe
+  exact_category_tokens:
+    - AI
+    - Productivity
+    - Tools:Utilities
