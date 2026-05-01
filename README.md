@@ -73,7 +73,7 @@ Placeholder upstream defaults such as `your-bucket-name` are intentionally blank
 - Release notes are generated with `git-cliff`.
 - The Unraid template `<Changes>` block is synced from `CHANGELOG.md` during release preparation.
 - `main` publishes `latest`, the pinned upstream version tag, an explicit AIO packaging line tag, and `sha-<commit>`.
-- When Docker Hub credentials are configured, the same publish flow pushes Docker Hub tags in parallel with GHCR so the CA template can use Docker Hub metadata and download counts.
+- Publish jobs require Docker Hub credentials and push the CA-facing Docker Hub tags directly so the CA template can use Docker Hub metadata and download counts.
 - The catalog XML is synced into `awesome-unraid` from this source repo after template validation passes.
 
 See [docs/releases.md](docs/releases.md) for the release workflow details.

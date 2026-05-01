@@ -29,7 +29,7 @@
 - verify first boot works with defaults
 - verify advanced settings stay optional
 - verify generated credentials persist if applicable
-- confirm GHCR package is public and pullable
+- confirm the Docker Hub image is public and pullable
 - confirm `awesome-unraid` contains the XML and icon
 - confirm the README first-run notes match the real install behavior
 - confirm version tags such as `1.14.0-aio.1` publish the expected image tags

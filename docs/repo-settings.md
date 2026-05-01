@@ -9,7 +9,7 @@ Apply these to every derived repo before it becomes public.
 - Disable Wikis and Projects unless you actively use them
 - Add a social preview image before the repo goes public
 - Set a clear About description and relevant GitHub topics
-- Mark the GHCR package public only after the first successful publish
+- Confirm the Docker Hub repository is public and pullable after the first successful publish
 - Make sure the repo description clearly reflects the wrapped upstream app
 
 ## Branch Protection
@@ -53,8 +53,8 @@ Suggested required checks:
 
 ## Packages
 
-- After the first successful publish, make the GHCR package public if the repo is public
-- Verify the package name matches the intended CA XML repository value
+- After the first successful publish, verify the Docker Hub repository is public if the repo is public
+- Verify the Docker Hub image name matches the intended CA XML repository value
 
 ## Secrets and Variables
 
