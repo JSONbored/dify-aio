@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -71,6 +72,62 @@ REQUIRED_DIFY_TARGETS = {
 }
 
 DIFY_CATEGORY_TOKENS = {"AI", "Productivity", "Tools:Utilities"}
+
+
+def run_common_template_validation() -> int:
+    candidates = []
+    explicit = os.environ.get("AIO_FLEET_MANIFEST", "").strip()
+    if explicit:
+        candidates.append(Path(explicit))
+    candidates.extend(
+        [
+            ROOT / ".aio-fleet" / "fleet.yml",
+            ROOT.parent / "aio-fleet" / "fleet.yml",
+        ]
+    )
+    manifest = next((candidate for candidate in candidates if candidate.exists()), None)
+    if manifest is None:
+        print(
+            "warning: aio-fleet manifest not found; skipping common template validation",
+            file=sys.stderr,
+        )
+        return 0
+
+    env = os.environ.copy()
+    fleet_src = manifest.parent / "src"
+    if fleet_src.exists():
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            f"{fleet_src}{os.pathsep}{existing}" if existing else str(fleet_src)
+        )
+    python = sys.executable
+    fleet_python = manifest.parent / ".venv" / "bin" / "python"
+    if fleet_python.exists():
+        python = str(fleet_python)
+
+    result = subprocess.run(  # nosec B603
+        [
+            python,
+            "-m",
+            "aio_fleet.cli",
+            "--manifest",
+            str(manifest),
+            "validate-template-common",
+            "--repo",
+            ROOT.name,
+            "--repo-path",
+            str(ROOT),
+        ],
+        check=False,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+    return result.returncode
 
 
 def resolve_template_path() -> Path:
@@ -327,6 +384,10 @@ def main() -> int:
         help="Validate every template referenced by components.toml.",
     )
     args = parser.parse_args()
+
+    common_status = run_common_template_validation()
+    if common_status:
+        return common_status
 
     if args.all:
         failures = 0
