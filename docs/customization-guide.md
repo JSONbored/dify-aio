@@ -49,7 +49,7 @@ Do not dump every upstream Dify environment variable into `dify-aio.xml`. The XM
 
 1. `python3 scripts/generate_dify_template.py --check`
 2. from `aio-fleet`: `python -m aio_fleet validate --repo dify-aio`
-3. `pytest tests/unit tests/template`
+3. `pytest tests/template`
 4. `pytest tests/integration -m integration`
 5. install from the generated XML in a clean Unraid environment
 6. verify `http://<unraid-ip>:8080/install`

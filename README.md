@@ -87,7 +87,7 @@ python3 -m venv .venv
 pip install -r requirements-dev.txt
 cd ../aio-fleet && python -m aio_fleet validate-template-common --repo dify-aio --repo-path ../dify-aio
 python3 scripts/generate_dify_template.py --check
-pytest tests/unit tests/template
+pytest tests/template
 pytest tests/integration -m integration
 ```
 
