@@ -1,0 +1,37 @@
+schema_version: 1
+repo: dify-aio
+github_repo: JSONbored/dify-aio
+app_slug: dify-aio
+image:
+  name: jsonbored/dify-aio
+  cache_scope: dify-aio-image
+  pytest_tag: dify-aio:pytest
+  publish_platforms: linux/amd64,linux/arm64
+release:
+  name: Dify AIO
+  profile: dify
+  previous_tag_command: latest-aio-tag
+upstream:
+  name: Dify
+  digest_arg: UPSTREAM_IMAGE_DIGEST
+template:
+  xml_paths:
+  - '*.xml'
+  - assets/**
+  generated: true
+  generator_check_command: python3 scripts/generate_dify_template.py --check
+catalog:
+  published: true
+  assets:
+  - source: dify-aio.xml
+    target: dify-aio.xml
+  - source: assets/app-icon.png
+    target: icons/dify.png
+tests:
+  unit: tests/unit tests/template
+  integration: tests/integration -m integration
+  extended_integration:
+    input_name: run_extended_integration
+    description: Run sidecar-backed external provider integration tests
+    pytest_args: tests/integration -m extended_integration
+  checkout_submodules: false
