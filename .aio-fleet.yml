@@ -15,6 +15,35 @@ upstream:
   name: Dify
   version_key: UPSTREAM_DIFY_VERSION
   digest_arg: UPSTREAM_IMAGE_DIGEST
+  commit_paths:
+    - Dockerfile
+    - dify-aio.xml
+    - rootfs/opt/dify-aio/upstream-env-vars.txt
+  monitor:
+    - component: dify-api
+      name: Dify API
+      source: github-releases
+      repo: langgenius/dify
+      image: langgenius/dify-api
+      digest_source: dockerhub
+      dockerfile: Dockerfile
+      version_key: UPSTREAM_DIFY_VERSION
+      digest_key: UPSTREAM_DIFY_API_DIGEST
+      stable_only: true
+      strategy: pr
+      release_notes_url: https://github.com/langgenius/dify/releases
+    - component: dify-web
+      name: Dify Web
+      source: github-releases
+      repo: langgenius/dify
+      image: langgenius/dify-web
+      digest_source: dockerhub
+      dockerfile: Dockerfile
+      version_key: UPSTREAM_DIFY_VERSION
+      digest_key: UPSTREAM_DIFY_WEB_DIGEST
+      stable_only: true
+      strategy: pr
+      release_notes_url: https://github.com/langgenius/dify/releases
 template:
   xml_paths:
     - "*.xml"
