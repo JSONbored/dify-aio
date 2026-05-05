@@ -348,3 +348,47 @@ configure_dify_env() {
 	fi
 	export INTERNAL_FILES_URL="${INTERNAL_FILES_URL:-http://127.0.0.1:5001}"
 }
+
+configure_plugin_daemon_runtime() {
+	export PATH="${PLUGIN_DAEMON_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+	export PYTHON_ENV_INIT_TIMEOUT="${PYTHON_ENV_INIT_TIMEOUT:-${PLUGIN_PYTHON_ENV_INIT_TIMEOUT:-120}}"
+	export PYTHON_INTERPRETER_PATH="${PYTHON_INTERPRETER_PATH:-/usr/local/bin/python3.12}"
+	export UV_PATH="${UV_PATH:-/usr/local/bin/uv}"
+	export PLUGIN_IGNORE_UV_LOCK="${PLUGIN_IGNORE_UV_LOCK:-false}"
+
+	if [[ ! -x ${PYTHON_INTERPRETER_PATH} ]]; then
+		aio_log "Plugin daemon Python interpreter is not executable: ${PYTHON_INTERPRETER_PATH}"
+		return 1
+	fi
+
+	if ! "${PYTHON_INTERPRETER_PATH}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+		aio_log "Plugin daemon Python interpreter must be Python 3.11 or newer: ${PYTHON_INTERPRETER_PATH}"
+		return 1
+	fi
+
+	if [[ ! -x ${UV_PATH} ]]; then
+		aio_log "Plugin daemon uv path is not executable: ${UV_PATH}"
+		return 1
+	fi
+
+	if ! "${UV_PATH}" --version >/dev/null 2>&1; then
+		aio_log "Plugin daemon uv failed to execute: ${UV_PATH}"
+		return 1
+	fi
+
+	if [[ -z ${PLUGIN_WORKING_PATH-} ]]; then
+		aio_log "Plugin daemon working path is not configured."
+		return 1
+	fi
+
+	if [[ -z ${PLUGIN_STORAGE_LOCAL_ROOT-} ]]; then
+		aio_log "Plugin daemon local storage root is not configured."
+		return 1
+	fi
+
+	if [[ ${UV_CACHE_DIR-} == "" || ${UV_CACHE_DIR} == "/tmp/.uv-cache" ]]; then
+		export UV_CACHE_DIR="${PLUGIN_WORKING_PATH}/.uv-cache"
+	fi
+
+	mkdir -p "${PLUGIN_STORAGE_LOCAL_ROOT}" "${PLUGIN_WORKING_PATH}" "${UV_CACHE_DIR}"
+}

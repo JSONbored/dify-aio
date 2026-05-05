@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import time
 from collections import defaultdict
 
@@ -94,6 +95,49 @@ def test_happy_path_boot_and_restart_persists_generated_env(
             "awk -F= '/^SECRET_KEY=/{print $2}' /appdata/config/generated.env"
         ).stdout.strip()
         assert secret_after == secret_before  # nosec B101
+
+
+def test_plugin_daemon_runtime_can_resolve_uv_and_python(
+    runtime: DockerRuntime,
+) -> None:
+    with runtime.container() as container:
+        container.wait_for_http(path="/", timeout=900)
+        result = container.exec(
+            'pid="$(for proc in /proc/[0-9]*; do '
+            "cmd=\"$(tr '\\000' ' ' < \"$proc/cmdline\" 2>/dev/null || true)\"; "
+            "case \"$cmd\" in '/opt/dify-plugin-daemon/main '*) "
+            "printf '%s\\n' \"${proc##*/}\"; break;; esac; "
+            'done)"; '
+            'if [ -z "$pid" ]; then exit 1; fi; '
+            "tr '\\000' '\\n' < \"/proc/${pid}/environ\" "
+            "| awk -F= '/^(PATH|UV_PATH|PYTHON_INTERPRETER_PATH|"
+            "PYTHON_ENV_INIT_TIMEOUT|PLUGIN_WORKING_PATH|UV_CACHE_DIR)=/{print}'"
+        )
+        daemon_env = dict(
+            line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+        )
+
+        assert daemon_env["UV_PATH"] == "/usr/local/bin/uv"  # nosec B101
+        assert (  # nosec B101
+            daemon_env["PYTHON_INTERPRETER_PATH"] == "/usr/local/bin/python3.12"
+        )
+        assert daemon_env["PYTHON_ENV_INIT_TIMEOUT"] == "120"  # nosec B101
+        assert (  # nosec B101
+            daemon_env["PLUGIN_WORKING_PATH"] == "/appdata/plugin_daemon/cwd"
+        )
+        assert (  # nosec B101
+            daemon_env["UV_CACHE_DIR"] == "/appdata/plugin_daemon/cwd/.uv-cache"
+        )
+        assert "/usr/local/bin" in daemon_env["PATH"].split(":")  # nosec B101
+
+        uv_path = shlex.quote(daemon_env["UV_PATH"])
+        python_path = shlex.quote(daemon_env["PYTHON_INTERPRETER_PATH"])
+        container.exec(f"{uv_path} --version >/dev/null")
+        container.exec(
+            f"{python_path} -c "
+            "'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'"
+        )
+        container.exec("test -d /appdata/plugin_daemon/cwd/.uv-cache")
 
 
 def test_generated_secret_files_are_owner_only(runtime: DockerRuntime) -> None:
