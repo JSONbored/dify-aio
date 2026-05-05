@@ -20,6 +20,8 @@ export PLUGIN_REMOTE_INSTALLING_HOST="${PLUGIN_DEBUGGING_HOST:-127.0.0.1}"
 export PLUGIN_REMOTE_INSTALLING_PORT="${PLUGIN_DEBUGGING_PORT:-5003}"
 export PLUGIN_STORAGE_LOCAL_ROOT
 
+configure_plugin_daemon_runtime
+
 cd /opt/dify-plugin-daemon
 /opt/dify-plugin-daemon/commandline migrate
 exec /opt/dify-plugin-daemon/main
