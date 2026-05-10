@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess  # nosec B404 - tests execute trusted local shell snippets.
 import tempfile
 from pathlib import Path
@@ -61,12 +62,12 @@ def _configure_env(extra_env: dict[str, str]) -> str:
         extra_env_file.write_text("")
         env = {
             "PATH": os.environ["PATH"],
-            "SECRET_KEY": "test-secret",
-            "DB_PASSWORD": "test-db-password",
-            "REDIS_PASSWORD": "test-redis-password",
-            "SANDBOX_API_KEY": "test-sandbox-key",
-            "PLUGIN_DAEMON_KEY": "test-plugin-daemon-key",
-            "PLUGIN_DIFY_INNER_API_KEY": "test-plugin-inner-key",
+            "SECRET_KEY": "test-secret",  # nosec B105 - local test fixture.
+            "DB_PASSWORD": "test-db-password",  # nosec B105 - local test fixture.
+            "REDIS_PASSWORD": "test-redis-password",  # nosec B105 - local test fixture.
+            "SANDBOX_API_KEY": "test-sandbox-key",  # nosec B105 - local test fixture.
+            "PLUGIN_DAEMON_KEY": "test-plugin-daemon-key",  # nosec B105 - local test fixture.
+            "PLUGIN_DIFY_INNER_API_KEY": "test-plugin-inner-key",  # nosec B105 - local test fixture.
             "DIFY_AIO_EXTRA_ENV_FILE": str(extra_env_file),
             **extra_env,
         }
@@ -76,18 +77,22 @@ set -euo pipefail
 AIO_ENV_FILE={generated_env}
 configure_dify_env
 for key in {" ".join(PROXY_KEYS)}; do
-    if [[ -v "${{key}}" ]]; then
-        printf '%s=%s\\n' "${{key}}" "${{!key}}"
+    if value="$(printenv "${{key}}")"; then
+        printf '%s=%s\\n' "${{key}}" "${{value}}"
     fi
 done
 printf 'SSRF_PROXY_HTTP_URL=%s\\n' "${{SSRF_PROXY_HTTP_URL}}"
 printf 'SANDBOX_HTTP_PROXY=%s\\n' "${{SANDBOX_HTTP_PROXY}}"
 """
-        result = subprocess.run(  # nosec B603 - static shell snippet for env probing.
-            ["bash", "-lc", command],
-            check=True,
-            env=env,
-            text=True,
-            capture_output=True,
+        bash = shutil.which("bash")
+        assert bash is not None  # nosec B101
+        result = (
+            subprocess.run(  # nosec B603, B607 - static shell snippet for env probing.
+                [bash, "-lc", command],
+                check=True,
+                env=env,
+                text=True,
+                capture_output=True,
+            )
         )
         return result.stdout
