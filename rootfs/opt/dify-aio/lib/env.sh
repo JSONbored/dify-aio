@@ -216,11 +216,21 @@ set_public_url_if_default() {
 	esac
 }
 
+sanitize_generic_proxy_env() {
+	if is_true "${DIFY_AIO_TRUST_INHERITED_PROXY_ENV:-false}"; then
+		return
+	fi
+
+	unset HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY
+	unset http_proxy https_proxy all_proxy no_proxy
+}
+
 configure_dify_env() {
 	normalize_blank_upstream_env
 	normalize_blank_env "${AIO_BLANK_AS_UNSET_VARS[@]}"
 	load_generated_env
 	load_extra_env
+	sanitize_generic_proxy_env
 
 	export EDITION="${EDITION:-SELF_HOSTED}"
 	export DEPLOY_ENV="${DEPLOY_ENV:-PRODUCTION}"
