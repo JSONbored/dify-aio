@@ -6,6 +6,18 @@ acl localnet src 172.16.0.0/12
 acl localnet src 192.168.0.0/16
 acl localnet src fc00::/7
 acl localnet src fe80::/10
+acl deny_internal dst 0.0.0.0/8
+acl deny_internal dst 10.0.0.0/8
+acl deny_internal dst 100.64.0.0/10
+acl deny_internal dst 127.0.0.0/8
+acl deny_internal dst 169.254.0.0/16
+acl deny_internal dst 172.16.0.0/12
+acl deny_internal dst 192.168.0.0/16
+acl deny_internal dst 224.0.0.0/4
+acl deny_internal dst 240.0.0.0/4
+acl deny_internal dst ::1/128
+acl deny_internal dst fc00::/7
+acl deny_internal dst fe80::/10
 acl SSL_ports port 443
 acl Safe_ports port 80
 acl Safe_ports port 21
@@ -20,9 +32,10 @@ acl Safe_ports port 777
 acl CONNECT method CONNECT
 acl allowed_domains dstdomain .marketplace.dify.ai
 
-http_access allow allowed_domains
 http_access deny !Safe_ports
 http_access deny CONNECT !SSL_ports
+http_access deny deny_internal
+http_access allow allowed_domains
 http_access allow localhost manager
 http_access deny manager
 http_access allow localhost
