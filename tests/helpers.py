@@ -13,6 +13,26 @@ from pathlib import Path
 
 from tests.conftest import REPO_ROOT
 
+DOCKER_EXEC_PROXY_ENV_ARGS = [
+    "env",
+    "-u",
+    "HTTP_PROXY",
+    "-u",
+    "HTTPS_PROXY",
+    "-u",
+    "ALL_PROXY",
+    "-u",
+    "NO_PROXY",
+    "-u",
+    "http_proxy",
+    "-u",
+    "https_proxy",
+    "-u",
+    "all_proxy",
+    "-u",
+    "no_proxy",
+]
+
 
 def run_command(
     command: list[str],
@@ -109,7 +129,16 @@ def docker_exec(
     container_name: str, command: str, *, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
     return run_command(
-        ["docker", "exec", container_name, "sh", "-lc", command], check=check
+        [
+            "docker",
+            "exec",
+            container_name,
+            *DOCKER_EXEC_PROXY_ENV_ARGS,
+            "sh",
+            "-lc",
+            command,
+        ],
+        check=check,
     )
 
 
