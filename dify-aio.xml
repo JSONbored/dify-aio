@@ -31,12 +31,9 @@
 - Dify is a heavier multi-service stack. Plan for at least 2 CPU cores and 4 GiB RAM, with more memory for real indexing, workflow, or model-heavy workloads.&#xD;
 - Public exposure should sit behind a trusted reverse proxy with TLS. Review sandbox/network settings before allowing untrusted users to run code or tools.&#xD;
 - External vector stores, object storage, SMTP, and model providers are optional but real production deployments may need them.</Overview>
-  <Changes>### 2026-05-10&#xD;
+  <Changes>### 2026-05-17&#xD;
 - Generated from CHANGELOG.md during release preparation. Do not edit manually.&#xD;
-- Block internal SSRF proxy targets&#xD;
-- Format dify ssrf policy test&#xD;
-- Ignore inherited generic proxy env&#xD;
-- Satisfy proxy env lint</Changes>
+- Update upstream pins for dify-aio (#36)</Changes>
   <Category>AI Productivity Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/dify-aio.xml</TemplateURL>
