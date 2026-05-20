@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.14.2-aio.2 - 2026-05-20
+
+### Fixes
+
+- Verify s6 overlay archives
+
 ## 1.14.2-aio.1 - 2026-05-19
 
 ### Maintenance
