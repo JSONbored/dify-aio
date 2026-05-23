@@ -135,6 +135,11 @@ def test_unraid_metadata_contract_is_complete_and_unprivileged() -> None:
     assert (
         root.findtext("ReadMe") == "https://github.com/JSONbored/dify-aio#readme"
     )  # nosec B101
+    assert [s.text for s in root.findall("Screenshot")] == [  # nosec B101
+        "https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/screenshots/dify-aio/01-login.png",
+        "https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/screenshots/dify-aio/02-workspace.png",
+        "https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/screenshots/dify-aio/03-studio.png",
+    ]
 
 
 def test_overview_includes_beginner_and_power_user_guidance() -> None:

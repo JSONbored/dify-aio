@@ -41,6 +41,9 @@
   <Icon>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/icons/dify.png</Icon>
   <ExtraSearchTerms>ai agent workflow llm rag chatbot mcp openai anthropic ollama app builder knowledge base</ExtraSearchTerms>
   <Requires>Dify is a heavier multi-service application. Plan for at least 2 CPU cores and 4 GiB RAM, with more memory for real workloads. Public exposure should be placed behind a trusted reverse proxy with TLS. Model-provider API keys, SMTP, object storage, and external vector stores are optional but may be required for production use.</Requires>
+  <Screenshot>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/screenshots/dify-aio/01-login.png</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/screenshots/dify-aio/02-workspace.png</Screenshot>
+  <Screenshot>https://raw.githubusercontent.com/JSONbored/awesome-unraid/main/screenshots/dify-aio/03-studio.png</Screenshot>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
