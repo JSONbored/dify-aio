@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.14.2-aio.3 - 2026-05-26
+
+### Documentation
+
+- Add CA screenshots
+
 ## 1.14.2-aio.2 - 2026-05-20
 
 ### Fixes
