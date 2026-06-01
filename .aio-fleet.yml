@@ -57,6 +57,12 @@ catalog:
       target: dify-aio.xml
     - source: assets/app-icon.png
       target: icons/dify.png
+    - source: screenshots/dify-aio/01-login.png
+      target: screenshots/dify-aio/01-login.png
+    - source: screenshots/dify-aio/02-workspace.png
+      target: screenshots/dify-aio/02-workspace.png
+    - source: screenshots/dify-aio/03-studio.png
+      target: screenshots/dify-aio/03-studio.png
 tests:
   unit: tests/template
   integration: tests/integration -m integration
