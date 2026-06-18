@@ -453,25 +453,12 @@ def test_dockerfile_has_runtime_safety_contract() -> None:
 
 
 def test_s6_overlay_archives_have_pinned_checksums() -> None:
-    arg_defaults = _arg_defaults()
-    for arg in (
-        "S6_OVERLAY_NOARCH_SHA256",
-        "S6_OVERLAY_X86_64_SHA256",
-        "S6_OVERLAY_AARCH64_SHA256",
-    ):
-        value = arg_defaults.get(arg, "")
-        assert re.fullmatch(
-            r"[0-9a-f]{64}", value
-        ), f"{arg} must be pinned"  # nosec B101
-
     dockerfile = _dockerfile_text()
-    tmp_dir = "/" + "tmp"
-    assert (
-        f'{tmp_dir}/s6-overlay-noarch.tar.xz" | sha256sum -c -' in dockerfile
-    )  # nosec B101
-    assert (
-        f'{tmp_dir}/s6-overlay-arch.tar.xz" | sha256sum -c -' in dockerfile
-    )  # nosec B101
+    # The pinned, SHA-verified s6-overlay now comes from the shared, digest-pinned
+    # jsonbored/aio-base overlay instead of an inline per-repo download.
+    assert "jsonbored/aio-base" in dockerfile  # nosec B101
+    assert "@sha256:" in dockerfile  # nosec B101
+    assert "COPY --from=aio-base /aio-overlay/ /" in dockerfile  # nosec B101
 
 
 def test_docker_socket_mount_is_advanced_and_documented_when_present() -> None:
