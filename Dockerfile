@@ -10,10 +10,8 @@ ARG UPSTREAM_DIFY_SANDBOX_DIGEST=sha256:750e1111426ef31a9217b81c98cccfb750f17b18
 ARG UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION=0.6.0-local
 ARG UPSTREAM_DIFY_PLUGIN_DAEMON_DIGEST=sha256:f200b00544f83ed69ea11d82996819be43415ad33e5c2b37436667df152ef6c8
 ARG NODE_RUNTIME_DIGEST=sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c
-ARG S6_OVERLAY_VERSION=3.2.1.0
-ARG S6_OVERLAY_NOARCH_SHA256=42e038a9a00fc0fef70bf0bc42f625a9c14f8ecdfe77d4ad93281edf717e10c5
-ARG S6_OVERLAY_X86_64_SHA256=8bcbc2cada58426f976b159dcc4e06cbb1454d5f39252b3bb0c778ccf71c9435
-ARG S6_OVERLAY_AARCH64_SHA256=c8fd6b1f0380d399422fc986a1e6799f6a287e2cfa24813ad0b6a4fb4fa755cc
+
+FROM jsonbored/aio-base:s6-3.2.1.0@sha256:07db479a01a95ba28480b4605f5d1cc8bedb574b77cf167ee46e29b9558fee90 AS aio-base
 
 FROM langgenius/dify-web:${UPSTREAM_DIFY_VERSION}@${UPSTREAM_DIFY_WEB_DIGEST} AS web
 FROM langgenius/dify-sandbox:${UPSTREAM_DIFY_SANDBOX_VERSION}@${UPSTREAM_DIFY_SANDBOX_DIGEST} AS sandbox
@@ -21,14 +19,9 @@ FROM langgenius/dify-plugin-daemon:${UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION}@${UPST
 FROM node:22-bookworm-slim@${NODE_RUNTIME_DIGEST} AS node_runtime
 FROM langgenius/dify-api:${UPSTREAM_DIFY_VERSION}@${UPSTREAM_DIFY_API_DIGEST}
 
-ARG TARGETARCH
 ARG UPSTREAM_DIFY_VERSION
 ARG UPSTREAM_DIFY_SANDBOX_VERSION
 ARG UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION
-ARG S6_OVERLAY_VERSION
-ARG S6_OVERLAY_NOARCH_SHA256
-ARG S6_OVERLAY_X86_64_SHA256
-ARG S6_OVERLAY_AARCH64_SHA256
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -46,8 +39,10 @@ LABEL org.opencontainers.image.title="dify-aio" \
       io.jsonbored.upstream.dify_plugin_daemon.version="${UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION}"
 
 # trunk-ignore(hadolint/DL3008)
-RUN find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i 's|http://|https://|g' {} + && \
-    printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/80-retries && \
+# Shared, pinned s6-overlay from the fleet aio-base overlay.
+COPY --from=aio-base /aio-overlay/ /
+
+RUN aio-harden pre && \
     DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
@@ -66,17 +61,6 @@ RUN find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i
       postgresql-15 \
       postgresql-15-pgvector \
       postgresql-client-15 && \
-    curl -fsSL -o /tmp/s6-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" && \
-    echo "${S6_OVERLAY_NOARCH_SHA256}  /tmp/s6-overlay-noarch.tar.xz" | sha256sum -c - && \
-    tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
-    case "${TARGETARCH}" in \
-      amd64) s6_arch="x86_64"; s6_arch_sha256="${S6_OVERLAY_X86_64_SHA256}" ;; \
-      arm64) s6_arch="aarch64"; s6_arch_sha256="${S6_OVERLAY_AARCH64_SHA256}" ;; \
-      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac && \
-    curl -fsSL -o /tmp/s6-overlay-arch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${s6_arch}.tar.xz" && \
-    echo "${s6_arch_sha256}  /tmp/s6-overlay-arch.tar.xz" | sha256sum -c - && \
-    tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz && \
     mkdir -p /appdata /opt/dify-aio /opt/dify-web /opt/dify-plugin-daemon /opt/dify-sandbox /run/postgresql /var/lib/postgresql/data && \
     chown -R postgres:postgres /run/postgresql /var/lib/postgresql && \
     rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf && \
