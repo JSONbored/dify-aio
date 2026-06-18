@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.14.2-aio.4 - 2026-06-18
+
+### Maintenance
+
+- Refresh fleet manifest contract
+
+### Refactors
+
+- Migrate to the shared aio-base s6 overlay (#47)
+
+### Tests
+
+- Use shared app test helpers
+
 ## 1.14.2-aio.3 - 2026-05-26
 
 ### Documentation
