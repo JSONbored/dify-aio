@@ -38,10 +38,10 @@ LABEL org.opencontainers.image.title="dify-aio" \
       io.jsonbored.upstream.dify_sandbox.version="${UPSTREAM_DIFY_SANDBOX_VERSION}" \
       io.jsonbored.upstream.dify_plugin_daemon.version="${UPSTREAM_DIFY_PLUGIN_DAEMON_VERSION}"
 
-# trunk-ignore(hadolint/DL3008)
 # Shared, pinned s6-overlay from the fleet aio-base overlay.
 COPY --from=aio-base /aio-overlay/ /
 
+# trunk-ignore(hadolint/DL3008)
 RUN aio-harden pre && \
     DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       ca-certificates \
