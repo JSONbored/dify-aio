@@ -57,7 +57,7 @@ jobs:
           docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5002/health/check | jq -e '.status=="ok" and .platform=="local" and .version=="14d714820d475075e15bd8dae605d61298382213"'
           docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5050/openapi.json | jq -e '.info.title=="Dify Agent Run Server"'
           docker exec candidate curl -fsS http://local_sandbox:5004/healthz >/dev/null
-          docker exec candidate sh -c 'curl -fsS -H "Authorization: Bearer $DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN" http://local_sandbox:5004/v1/jobs' | jq -e '.jobs | type == "array"'
+          docker exec candidate sh -c 'curl -fsS -H "Authorization: Bearer $DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN" http://local_sandbox:5004/v1/jobs' | jq -e 'has("jobs") and (.jobs == null or .jobs == [])'
           docker inspect "$(docker compose -f "$dq" ps -q local_sandbox)" | jq -e '.[0].Mounts | any(.Destination == "/workspace" and .Type == "volume")'
           echo "Preserved application database, stored file and existing secret hashes."
       - name: Show failed service diagnostics
