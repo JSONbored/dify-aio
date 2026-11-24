@@ -124,7 +124,7 @@ If this work saves you time, support it here:
 
 ### Dify 1.20 upgrade and Agent shell execution
 
-Back up the previous image's PostgreSQL data, uploaded files, vector data, plugin storage and generated secrets. The existing API startup migration applies Dify's Alembic chain. Preserve `SECRET_KEY` and any existing `PASSWORD_PEPPER`. The API uses Python 3.13 and the bundled plugin daemon uses its own Python 3.12 interpreter. The Agent Backend runs on loopback port 5050.
+Back up the previous image's PostgreSQL data, uploaded files, vector data, plugin storage and generated secrets. The existing API startup migration applies Dify's Alembic chain. Preserve `SECRET_KEY` and any existing `PASSWORD_PEPPER`. The API uses Python 3.13 and the bundled plugin daemon uses its own Python 3.12 interpreter. The Agent Backend runs on loopback port 5050. The plugin daemon logs to Docker stdout. To also write a daemon log file, set `PLUGIN_DAEMON_LOG_FILE` in `/appdata/config/extra.env` to a path writable by the `dify` service user.
 
 The classic workflow code sandbox remains bundled. Agent jobs that need a shell use a separate runtime. For the local runtime, deploy [the companion Compose file](docs/examples/agent-local-sandbox.compose.yaml) with a fresh random `DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN`. Set the same token on the AIO, using the masked template field or its private extra.env file. Attach the AIO to the companion's internal network with the DNS alias `dify-aio`, preserving the usual frontend network. Use these settings in the AIO:
 
