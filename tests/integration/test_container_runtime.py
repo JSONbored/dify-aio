@@ -105,16 +105,18 @@ def test_plugin_daemon_runtime_can_resolve_uv_and_python(
         container.exec("curl -fsS --retry 30 --retry-all-errors --retry-delay 2 --max-time 3 http://127.0.0.1:5002/health/check")
         agent = container.exec("curl -fsS --retry 30 --retry-all-errors --retry-delay 2 --max-time 3 http://127.0.0.1:5050/openapi.json")
         assert "Dify Agent Run Server" in agent.stdout  # nosec B101
-        result = container.exec(
-            'pid="$(for proc in /proc/[0-9]*; do '
-            "cmd=\"$(tr '\\000' ' ' < \"$proc/cmdline\" 2>/dev/null || true)\"; "
-            "case \"$cmd\" in '/opt/dify-plugin-daemon/main '*) "
-            "printf '%s\\n' \"${proc##*/}\"; break;; esac; "
-            'done)"; '
-            'if [ -z "$pid" ]; then exit 1; fi; '
-            "tr '\\000' '\\n' < \"/proc/${pid}/environ\" "
+        pid = container.exec(
+            "/command/s6-svstat -o pid /run/service/plugin-daemon"
+        ).stdout.strip()
+        assert pid.isdecimal() and int(pid) > 1  # nosec B101
+        # Read only runtime paths, using the service's UID for procfs access.
+        read_env = (
+            f"tr '\\000' '\\n' < /proc/{pid}/environ "
             "| awk -F= '/^(PATH|UV_PATH|PYTHON_INTERPRETER_PATH|"
             "PYTHON_ENV_INIT_TIMEOUT|PLUGIN_WORKING_PATH|UV_CACHE_DIR)=/{print}'"
+        )
+        result = container.exec(
+            f"/command/s6-setuidgid dify bash -o pipefail -c {shlex.quote(read_env)}"
         )
         daemon_env = dict(
             line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
@@ -135,9 +137,9 @@ def test_plugin_daemon_runtime_can_resolve_uv_and_python(
 
         uv_path = shlex.quote(daemon_env["UV_PATH"])
         python_path = shlex.quote(daemon_env["PYTHON_INTERPRETER_PATH"])
-        container.exec(f"{uv_path} --version >/dev/null")
+        container.exec(f"/command/s6-setuidgid dify {uv_path} --version >/dev/null")
         container.exec(
-            f"{python_path} -c "
+            f"/command/s6-setuidgid dify {python_path} -c "
             "'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'"
         )
         container.exec("test -d /appdata/plugin_daemon/cwd/.uv-cache")
