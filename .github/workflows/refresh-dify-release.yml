@@ -58,3 +58,12 @@ jobs:
           docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5050/openapi.json | jq -e '.info.title=="Dify Agent Run Server"'
           docker exec candidate curl -fsS http://local_sandbox:5004/healthz >/dev/null
           echo "Preserved application database, stored file and existing secret hashes."
+      - name: Show failed service diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for name in old candidate; do
+            if docker inspect "$name" >/dev/null 2>&1; then
+              docker logs --tail 450 "$name" 2>&1 | grep -Ei 'error|fail|panic|permission|denied|no such|invalid|s6|postgres|plugin daemon|plugin.daemon|listen|migration|exception|uv|cannot|traceback|agent-backend' | sed -E 's#(://)[^ ]+:([^@ ]*)@#\1[redacted]@#g' | tail -100 || true
+            fi
+          done
