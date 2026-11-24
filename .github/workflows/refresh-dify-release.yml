@@ -54,7 +54,7 @@ jobs:
           test "$(docker exec -u postgres candidate psql --set ON_ERROR_STOP=1 -At -d dify -c 'SELECT marker FROM aio_upgrade_probe')" = old-image
           test "$(docker exec candidate cat /appdata/storage/aio-upgrade-proof)" = old-image
           test "$old_keys" = "$(docker exec candidate bash -c "grep -E '^(SECRET_KEY|DB_PASSWORD|REDIS_PASSWORD|PLUGIN_DAEMON_KEY|PLUGIN_DIFY_INNER_API_KEY)=' /appdata/config/generated.env | sort | sha256sum")"
-          docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5002/health/check | jq -e '.status=="ok" and (.version|contains("0.6.15"))'
+          docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5002/health/check | jq -e '.status=="ok" and .platform=="local" and .version=="14d714820d475075e15bd8dae605d61298382213"'
           docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5050/openapi.json | jq -e '.info.title=="Dify Agent Run Server"'
           docker exec candidate curl -fsS http://local_sandbox:5004/healthz >/dev/null
           docker exec candidate sh -c 'curl -fsS -H "Authorization: Bearer $DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN" http://local_sandbox:5004/v1/jobs' | jq -e '.jobs | type == "array"'
