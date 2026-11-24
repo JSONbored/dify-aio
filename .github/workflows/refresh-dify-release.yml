@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: be6a3c547cbbe8b6c062de917030d5fc7b8125fa
+          ref: 247a7f54bdfded132d6ef1c3980942c61b3041c5
           persist-credentials: false
       - name: Build the reviewed candidate
         run: docker build --progress=plain -t candidate:upgrade .
