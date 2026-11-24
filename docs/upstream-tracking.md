@@ -16,3 +16,5 @@ python -m aio_fleet release status --repo dify-aio
 ```
 
 Keep `strategy: notify` semantics in `aio-fleet` until companion-image digest refreshes are automated as one reviewed change.
+
+Dify 1.20 no longer publishes `CODE_GENERATION_MAX_TOKENS` or `PROMPT_GENERATION_MAX_TOKENS` as application settings. They appeared in the older monolithic sample and remain in an upstream test fixture. Existing installations can retain their explicit settings through the upgrade.
