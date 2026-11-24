@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.20.0-aio.1 - 2026-11-24
+
+### Fixes
+
+- Upgrade Dify to 1.20.0 and restore the plugin and agent runtimes (#51)
+
 ## 1.14.2-aio.4 - 2026-06-18
 
 ### Maintenance
