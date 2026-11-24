@@ -1,0 +1,26 @@
+#!/command/with-contenv bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. /opt/dify-aio/lib/env.sh
+load_generated_env
+configure_dify_env
+
+wait_for_http_url "http://127.0.0.1:5001/health" "Dify API"
+wait_for_http_url "${PLUGIN_DAEMON_URL}/health/check" "Dify plugin daemon"
+
+redis_scheme=redis
+if is_true "${REDIS_USE_SSL}"; then
+	redis_scheme=rediss
+fi
+redis_user="$(urlencode_value "${REDIS_USERNAME:-}")"
+redis_pass="$(urlencode_value "${REDIS_PASSWORD}")"
+export DIFY_AGENT_REDIS_URL="${DIFY_AGENT_REDIS_URL:-${redis_scheme}://${redis_user}:${redis_pass}@${REDIS_HOST}:${REDIS_PORT}/2}"
+export DIFY_AGENT_PLUGIN_DAEMON_URL="${DIFY_AGENT_PLUGIN_DAEMON_URL:-${PLUGIN_DAEMON_URL}}"
+export DIFY_AGENT_PLUGIN_DAEMON_API_KEY="${DIFY_AGENT_PLUGIN_DAEMON_API_KEY:-${PLUGIN_DAEMON_KEY}}"
+export DIFY_AGENT_INNER_API_URL="${DIFY_AGENT_INNER_API_URL:-${PLUGIN_DIFY_INNER_API_URL}}"
+export DIFY_AGENT_INNER_API_KEY="${DIFY_AGENT_INNER_API_KEY:-${PLUGIN_DIFY_INNER_API_KEY}}"
+export HOME=/home/dify
+
+cd /opt/dify-agent
+exec /command/s6-setuidgid dify /opt/dify-agent/venv/bin/python -m uvicorn dify_agent.server.app:app --host 127.0.0.1 --port 5050

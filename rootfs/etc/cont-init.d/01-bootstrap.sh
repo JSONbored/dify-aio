@@ -30,6 +30,10 @@ persist_secret_if_unset "REDIS_PASSWORD"
 persist_secret_if_unset "SANDBOX_API_KEY"
 persist_secret_if_unset "PLUGIN_DAEMON_KEY"
 persist_secret_if_unset "PLUGIN_DIFY_INNER_API_KEY"
+persist_secret_if_unset "DIFY_AGENT_API_TOKEN"
+if [[ -z ${DIFY_AGENT_SERVER_SECRET_KEY:-} ]]; then
+	persist_if_missing DIFY_AGENT_SERVER_SECRET_KEY "$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')"
+fi
 
 load_generated_env
 configure_dify_env

@@ -23,5 +23,7 @@ export PLUGIN_STORAGE_LOCAL_ROOT
 configure_plugin_daemon_runtime
 
 cd /opt/dify-plugin-daemon
-/opt/dify-plugin-daemon/commandline migrate
-exec /opt/dify-plugin-daemon/main
+export HOME=/home/dify
+export TIKTOKEN_CACHE_DIR=/opt/dify-plugin-daemon/.tiktoken
+/command/s6-setuidgid dify /opt/dify-plugin-daemon/commandline migrate
+exec /command/s6-setuidgid dify /opt/dify-plugin-daemon/main
