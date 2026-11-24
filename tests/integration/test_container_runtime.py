@@ -102,8 +102,12 @@ def test_plugin_daemon_runtime_can_resolve_uv_and_python(
 ) -> None:
     with runtime.container() as container:
         container.wait_for_http(path="/", timeout=900)
-        container.exec("curl -fsS --retry 30 --retry-all-errors --retry-delay 2 --max-time 3 http://127.0.0.1:5002/health/check")
-        agent = container.exec("curl -fsS --retry 30 --retry-all-errors --retry-delay 2 --max-time 3 http://127.0.0.1:5050/openapi.json")
+        container.exec(
+            "curl -fsS --retry 30 --retry-all-errors --retry-delay 2 --max-time 3 http://127.0.0.1:5002/health/check"
+        )
+        agent = container.exec(
+            "curl -fsS --retry 30 --retry-all-errors --retry-delay 2 --max-time 3 http://127.0.0.1:5050/openapi.json"
+        )
         assert "Dify Agent Run Server" in agent.stdout  # nosec B101
         pid = container.exec(
             "/command/s6-svstat -o pid /run/service/plugin-daemon"

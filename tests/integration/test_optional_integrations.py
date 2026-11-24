@@ -277,7 +277,9 @@ def test_s3_storage_and_smtp_configuration_boot_against_sidecars(
                         f"exec .venv/bin/python -c {shlex.quote(storage_probe)}"
                     )
                     result = container.exec(f"bash -c {shlex.quote(command)}")
-                    assert result.stdout.strip().splitlines()[-1] == "dify-aio"  # nosec B101
+                    assert (
+                        result.stdout.strip().splitlines()[-1] == "dify-aio"
+                    )  # nosec B101
                     container.exec("bash -lc 'exec 3<>/dev/tcp/mailpit/1025'")
 
                     env = _configured_env(
