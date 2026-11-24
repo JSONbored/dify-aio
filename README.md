@@ -99,7 +99,7 @@ Extended provider checks:
 pytest tests/integration -m extended_integration
 ```
 
-The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, MinIO-compatible S3 storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, SendGrid, workflow execution storage, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
+The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, SeaweedFS S3-compatible object storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, SendGrid, workflow execution storage, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
 
 The Unraid XML template is generated from `docs/upstream/dify.env.example` plus AIO-specific defaults. The generated XML is curated for Community Applications usability, while `rootfs/opt/dify-aio/upstream-env-vars.txt` still tracks the full upstream variable list for blank-value normalization and drift checks. When Dify updates its upstream environment surface, refresh the fixture, run `python3 scripts/generate_dify_template.py`, and then run validation.
 
