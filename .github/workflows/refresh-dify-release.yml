@@ -1,41 +1,60 @@
-name: Refresh Dify release inputs
+name: Verify published-image upgrade
 on:
   push:
     branches: [maintenance/refresh-dify-1.20.0]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  generate:
-    runs-on: ubuntu-24.04
+  upgrade:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: fix/dify-1.20-runtime
+          ref: b122db374039d431295c915ac389a15d55481932
           persist-credentials: false
-      - name: Refresh and verify the release inventory
+      - name: Build the reviewed candidate
+        run: docker build --progress=plain -t candidate:upgrade .
+      - name: Upgrade the current public image with an existing database and files
+        shell: bash
         run: |
-          python3 scripts/refresh_upstream_inventory.py
-          python3 scripts/generate_dify_template.py
-          python3 scripts/generate_dify_template.py --check
-      - name: Save generated inputs to the reviewed release branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PY'
-          import base64, json, subprocess
-          from pathlib import Path
-
-          paths = ["docs/upstream/dify.env.example", "rootfs/opt/dify-aio/upstream-env-vars.txt", "dify-aio.xml"]
-          if not subprocess.check_output(["git", "diff", "--name-only", "--", *paths]).strip():
-              raise SystemExit(0)
-          data = {
-              "query": "mutation($input:CreateCommitOnBranchInput!){createCommitOnBranch(input:$input){commit{oid}}}",
-              "variables": {"input": {
-                  "branch": {"repositoryNameWithOwner": "JSONbored/dify-aio", "branchName": "fix/dify-1.20-runtime"},
-                  "expectedHeadOid": subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
-                  "message": {"headline":"chore: refresh the Dify 1.20.0 configuration inventory and Unraid template"},
-                  "fileChanges":{"additions":[{"path":p,"contents":base64.b64encode(Path(p).read_bytes()).decode()} for p in paths]},
-              }},
+          set -euo pipefail
+          docker pull jsonbored/dify-aio:1.14.2-aio.4@sha256:31ff69e8d5d2bb5d0a940729df96f2be6d6d34761f3ad913f429fbd0f02f9562
+          docker volume create appdata
+          wait_ready() {
+            for _ in $(seq 1 180); do
+              if docker exec "$1" curl -fsS http://127.0.0.1:5001/health >/dev/null 2>&1; then return; fi
+              if [[ $(docker inspect -f '{{.State.Running}}' "$1") != true ]]; then break; fi
+              sleep 3
+            done
+            docker logs --tail=150 "$1"
+            return 1
           }
-          subprocess.run(["gh","api","graphql","--input","-"],input=json.dumps(data),text=True,check=True)
-          PY
+          docker run -d --name old -v appdata:/appdata jsonbored/dify-aio:1.14.2-aio.4@sha256:31ff69e8d5d2bb5d0a940729df96f2be6d6d34761f3ad913f429fbd0f02f9562
+          wait_ready old
+          docker exec -u postgres old psql --set ON_ERROR_STOP=1 -d dify -c "CREATE TABLE aio_upgrade_probe(marker text); INSERT INTO aio_upgrade_probe VALUES ('old-image');"
+          docker exec old bash -c 'printf "%s\n" old-image > /appdata/storage/aio-upgrade-proof'
+          old_keys=$(docker exec old bash -c "grep -E '^(SECRET_KEY|DB_PASSWORD|REDIS_PASSWORD|PLUGIN_DAEMON_KEY|PLUGIN_DIFY_INNER_API_KEY)=' /appdata/config/generated.env | sort | sha256sum")
+          docker stop -t 90 old
+          docker rm old
+          docker volume create restored-appdata
+          docker run --rm --entrypoint /bin/bash -v appdata:/from:ro -v restored-appdata:/to candidate:upgrade -o pipefail -c 'tar -C /from -cpf - . | tar -C /to -xpf -'
+          dq=docs/examples/agent-local-sandbox.compose.yaml
+          export DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN
+          DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN=$(openssl rand -hex 32)
+          echo "::add-mask::$DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN"
+          docker compose -f "$dq" up -d --wait
+          docker run -d --name candidate -e DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN -e DIFY_AGENT_LOCAL_SANDBOX_ENDPOINT=http://local_sandbox:5004 -e DIFY_AGENT_STUB_API_BASE_URL=http://dify-aio:8080/agent-stub -e DIFY_AGENT_SANDBOX_FILES_BASE_URL=http://dify-aio:8080 -v restored-appdata:/appdata candidate:upgrade
+          docker network connect --alias dify-aio dify-aio-agent-sandbox candidate
+          wait_ready candidate
+          test "$(docker exec -u postgres candidate psql --set ON_ERROR_STOP=1 -At -d dify -c 'SELECT marker FROM aio_upgrade_probe')" = old-image
+          test "$(docker exec candidate cat /appdata/storage/aio-upgrade-proof)" = old-image
+          test "$old_keys" = "$(docker exec candidate bash -c "grep -E '^(SECRET_KEY|DB_PASSWORD|REDIS_PASSWORD|PLUGIN_DAEMON_KEY|PLUGIN_DIFY_INNER_API_KEY)=' /appdata/config/generated.env | sort | sha256sum")"
+          docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5002/health/check | jq -e '.status=="ok" and (.version|contains("0.6.15"))'
+          docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5050/openapi.json | jq -e '.info.title=="Dify Agent Run Server"'
+          docker exec candidate curl -fsS http://local_sandbox:5004/healthz >/dev/null
+          echo "Preserved application database, stored file and existing secret hashes."
