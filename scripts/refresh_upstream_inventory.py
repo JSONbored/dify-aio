@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from generate_dify_template import ENUM_DEFAULTS, NON_SECRET_TARGETS
+
 ROOT = Path(__file__).resolve().parents[1]
 ASSIGNMENT = re.compile(r"^(#\s*)?([A-Z][A-Z0-9_]*)=(.*)$")
 
@@ -48,7 +50,7 @@ def main() -> None:
             self_default = re.fullmatch(r"\$\{" + key + r":?-(.*?)\}", value)
             if self_default:
                 value = self_default[1]
-            if commented or "$" in value:
+            if "$" in value or (commented and key not in NON_SECRET_TARGETS and key not in ENUM_DEFAULTS):
                 value = ""
             rank = 0 if path.startswith("docker/") and not commented else 1 if commented else 2
             if key not in values or rank < values[key][0]:
