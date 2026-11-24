@@ -1,0 +1,41 @@
+name: Refresh Dify release inputs
+on:
+  push:
+    branches: [maintenance/refresh-dify-1.20.0]
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: fix/dify-1.20-runtime
+          persist-credentials: false
+      - name: Refresh and verify the release inventory
+        run: |
+          python3 scripts/refresh_upstream_inventory.py
+          python3 scripts/generate_dify_template.py
+          python3 scripts/generate_dify_template.py --check
+      - name: Save generated inputs to the reviewed release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, subprocess
+          from pathlib import Path
+
+          paths = ["docs/upstream/dify.env.example", "rootfs/opt/dify-aio/upstream-env-vars.txt", "dify-aio.xml"]
+          if not subprocess.check_output(["git", "diff", "--name-only", "--", *paths]).strip():
+              raise SystemExit(0)
+          data = {
+              "query": "mutation($input:CreateCommitOnBranchInput!){createCommitOnBranch(input:$input){commit{oid}}}",
+              "variables": {"input": {
+                  "branch": {"repositoryNameWithOwner": "JSONbored/dify-aio", "branchName": "fix/dify-1.20-runtime"},
+                  "expectedHeadOid": subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
+                  "message": {"headline":"chore: refresh the Dify 1.20.0 configuration inventory and Unraid template"},
+                  "fileChanges":{"additions":[{"path":p,"contents":base64.b64encode(Path(p).read_bytes()).decode()} for p in paths]},
+              }},
+          }
+          subprocess.run(["gh","api","graphql","--input","-"],input=json.dumps(data),text=True,check=True)
+          PY
