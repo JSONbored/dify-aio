@@ -4,6 +4,8 @@ Dify upstream tracking is owned by `aio-fleet`. This repo keeps the Dify Dockerf
 
 Dify uses multiple companion images, so upstream bumps stay explicit and reviewed: API, web, sandbox, plugin daemon, and digest pins should move together.
 
+Run `python3 scripts/refresh_upstream_inventory.py` before `python3 scripts/generate_dify_template.py` to refresh the curated Unraid controls from the pinned release’s modular service environment files.
+
 ## Validation
 
 After changing upstream pins or generated env fixtures, run from `aio-fleet`:

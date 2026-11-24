@@ -175,6 +175,11 @@ ENUM_DEFAULTS = {
 
 CURATED_UPSTREAM_PREFIXES = (
     "ACCESS_TOKEN",
+    "AGENT_BACKEND_BASE_URL",
+    "DIFY_AGENT_LOCAL_SANDBOX",
+    "DIFY_AGENT_RUNTIME_BACKEND",
+    "DIFY_AGENT_SANDBOX_FILES_BASE_URL",
+    "DIFY_AGENT_STUB_API_BASE_URL",
     "ALIBABACLOUD_MYSQL",
     "ALIYUN_OSS",
     "ALLOW_",
@@ -400,6 +405,8 @@ def is_curated_upstream_target(target: str) -> bool:
 
 def should_blank_default(target: str) -> bool:
     return (
+        target in {"AGENT_BACKEND_BASE_URL", "DIFY_AGENT_LOCAL_SANDBOX_ENDPOINT", "DIFY_AGENT_SANDBOX_FILES_BASE_URL", "DIFY_AGENT_STUB_API_BASE_URL"}
+        or
         target in BLANK_DEFAULT_TARGETS
         or target in URL_PUBLIC_TARGETS
         or target in INTERNAL_SERVICE_TARGETS
