@@ -99,7 +99,7 @@ Extended provider checks:
 pytest tests/integration -m extended_integration
 ```
 
-The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, MinIO-compatible S3 storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, SendGrid, workflow execution storage, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
+The extended suite starts provider sidecars for external PostgreSQL plus Redis, Qdrant, SeaweedFS S3-compatible object storage, and SMTP capture, then boots the AIO container against those settings. It also verifies that common optional provider settings for plugin object storage, additional vector backends, SendGrid, workflow execution storage, Notion, Unstructured, Sentry, and OpenTelemetry can be supplied through `/appdata/config/extra.env`.
 
 The Unraid XML template is generated from `docs/upstream/dify.env.example` plus AIO-specific defaults. The generated XML is curated for Community Applications usability, while `rootfs/opt/dify-aio/upstream-env-vars.txt` still tracks the full upstream variable list for blank-value normalization and drift checks. When Dify updates its upstream environment surface, refresh the fixture, run `python3 scripts/generate_dify_template.py`, and then run validation.
 
@@ -121,3 +121,18 @@ If this work saves you time, support it here:
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=JSONbored/dify-aio&theme=dark)](https://star-history.com/#JSONbored/dify-aio&Date)
+
+### Dify 1.20 upgrade and Agent shell execution
+
+Back up the previous image's PostgreSQL data, uploaded files, vector data, plugin storage and generated secrets. The existing API startup migration applies Dify's Alembic chain. Preserve `SECRET_KEY` and any existing `PASSWORD_PEPPER`. The API uses Python 3.13 and the bundled plugin daemon uses its own Python 3.12 interpreter. The Agent Backend runs on loopback port 5050. The plugin daemon logs to Docker stdout. To also write a daemon log file, set `PLUGIN_DAEMON_LOG_FILE` in `/appdata/config/extra.env` to a path writable by the `dify` service user.
+
+The classic workflow code sandbox remains bundled. Agent jobs that need a shell use a separate runtime. For the local runtime, deploy [the companion Compose file](docs/examples/agent-local-sandbox.compose.yaml) with a fresh random `DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN`. Set the same token on the AIO, using the masked template field or its private extra.env file. Attach the AIO to the companion's internal network with the DNS alias `dify-aio`, preserving the usual frontend network. Use these settings in the AIO:
+
+```dotenv
+DIFY_AGENT_RUNTIME_BACKEND=local
+DIFY_AGENT_LOCAL_SANDBOX_ENDPOINT=http://local_sandbox:5004
+DIFY_AGENT_STUB_API_BASE_URL=http://dify-aio:8080/agent-stub
+DIFY_AGENT_SANDBOX_FILES_BASE_URL=http://dify-aio:8080
+```
+
+The companion keeps its private home and workspace volumes across upgrades. Its internal network gives it access to the AIO's authenticated stub and signed file routes. For Agent jobs that require internet access, use the upstream dedicated sandbox egress proxy or configure a supported external runtime. [Dify 1.20 upgrade guide](https://github.com/langgenius/dify/releases/tag/1.20.0)

@@ -8,6 +8,8 @@ configure_dify_env
 
 wait_for_http_url "http://127.0.0.1:5001/health" "Dify API"
 
+# The API log belongs to the API. The daemon logs to stdout by default.
+export LOG_FILE="${PLUGIN_DAEMON_LOG_FILE:-}"
 export DB_DATABASE="${DB_PLUGIN_DATABASE}"
 export DB_SSL_MODE="${DB_SSL_MODE:-disable}"
 export PLATFORM="${PLUGIN_PLATFORM:-local}"
@@ -23,5 +25,7 @@ export PLUGIN_STORAGE_LOCAL_ROOT
 configure_plugin_daemon_runtime
 
 cd /opt/dify-plugin-daemon
-/opt/dify-plugin-daemon/commandline migrate
-exec /opt/dify-plugin-daemon/main
+export HOME=/home/dify
+export TIKTOKEN_CACHE_DIR=/opt/dify-plugin-daemon/.tiktoken
+/command/s6-setuidgid dify /opt/dify-plugin-daemon/commandline migrate
+exec /command/s6-setuidgid dify /opt/dify-plugin-daemon/main

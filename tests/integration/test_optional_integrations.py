@@ -20,7 +20,7 @@ POSTGRES_IMAGE = "pgvector/pgvector:pg15"
 QDRANT_IMAGE = "qdrant/qdrant:v1.13.5"
 REDIS_IMAGE = "redis:7-alpine"
 MAILPIT_IMAGE = "axllent/mailpit:latest"
-MINIO_IMAGE = "minio/minio:latest"
+S3_IMAGE = "chrislusf/seaweedfs:4.55@sha256:7ca46aeae2f223b37e5d91593c17ab37738eec6df6ab69b48a0487f7643342b9"
 
 
 def _configured_env(container_name: str, keys: list[str]) -> dict[str, str]:
@@ -208,31 +208,25 @@ def test_qdrant_vector_store_configuration_boots_against_sidecar(
 def test_s3_storage_and_smtp_configuration_boot_against_sidecars(
     runtime: DockerRuntime,
 ) -> None:
-    minio_http_port = reserve_host_port()
+    s3_http_port = reserve_host_port()
     mailpit_http_port = reserve_host_port()
 
     with docker_network("dify-aio-storage-mail") as network:
         with sidecar_container(
-            "dify-minio",
-            MINIO_IMAGE,
+            "dify-s3",
+            S3_IMAGE,
             network=network,
-            network_alias="minio",
-            ports={minio_http_port: 9000},
+            network_alias="s3",
+            ports={s3_http_port: 8333},
             env={
-                "MINIO_ROOT_USER": "minioadmin",
-                "MINIO_ROOT_PASSWORD": "minioadmin",  # nosec B105 - local test fixture.
+                "AWS_ACCESS_KEY_ID": "dify-test",
+                "AWS_SECRET_ACCESS_KEY": "dify-test-secret",  # nosec B105
+                "S3_BUCKET": "dify-files",
             },
-            command_args=[
-                "server",
-                "/data",
-                "--address",
-                ":9000",
-                "--console-address",
-                ":9001",
-            ],
+            command_args=["mini"],
         ):
             wait_for_host_http(
-                f"http://127.0.0.1:{minio_http_port}/minio/health/ready",
+                f"http://127.0.0.1:{s3_http_port}/readyz",
                 timeout=180,
             )
 
@@ -252,11 +246,11 @@ def test_s3_storage_and_smtp_configuration_boot_against_sidecars(
                     network=network,
                     env_overrides={
                         "STORAGE_TYPE": "s3",
-                        "S3_ENDPOINT": "http://minio:9000",
+                        "S3_ENDPOINT": "http://s3:8333",
                         "S3_REGION": "us-east-1",
                         "S3_BUCKET_NAME": "dify-files",
-                        "S3_ACCESS_KEY": "minioadmin",
-                        "S3_SECRET_KEY": "minioadmin",  # nosec B105 - local test fixture.
+                        "S3_ACCESS_KEY": "dify-test",
+                        "S3_SECRET_KEY": "dify-test-secret",  # nosec B105 - local test fixture.
                         "S3_ADDRESS_STYLE": "path",
                         "MAIL_TYPE": "smtp",
                         "MAIL_DEFAULT_SEND_FROM": "noreply@example.test",
@@ -267,9 +261,25 @@ def test_s3_storage_and_smtp_configuration_boot_against_sidecars(
                     },
                 ) as container:
                     container.wait_for_http(path="/", timeout=900)
-                    container.exec(
-                        "curl -fsS http://minio:9000/minio/health/ready >/dev/null"
+                    storage_probe = "\n".join(
+                        [
+                            "from extensions.storage.aws_s3_storage import AwsS3Storage",
+                            "storage = AwsS3Storage()",
+                            "key = 'aio-integration/storage-probe'",
+                            "storage.save(key, b'dify-aio')",
+                            "print(storage.load_once(key).decode())",
+                            "storage.delete(key)",
+                        ]
                     )
+                    command = (
+                        ". /opt/dify-aio/lib/env.sh && load_generated_env && "
+                        "configure_dify_env && cd /app/api && "
+                        f"exec .venv/bin/python -c {shlex.quote(storage_probe)}"
+                    )
+                    result = container.exec(f"bash -c {shlex.quote(command)}")
+                    assert (
+                        result.stdout.strip().splitlines()[-1] == "dify-aio"
+                    )  # nosec B101
                     container.exec("bash -lc 'exec 3<>/dev/tcp/mailpit/1025'")
 
                     env = _configured_env(
@@ -288,7 +298,7 @@ def test_s3_storage_and_smtp_configuration_boot_against_sidecars(
                     )
                     assert env == {  # nosec B101
                         "STORAGE_TYPE": "s3",
-                        "S3_ENDPOINT": "http://minio:9000",
+                        "S3_ENDPOINT": "http://s3:8333",
                         "S3_BUCKET_NAME": "dify-files",
                         "S3_ADDRESS_STYLE": "path",
                         "MAIL_TYPE": "smtp",

@@ -26,6 +26,11 @@ server {
         include /etc/nginx/conf.d/proxy.conf;
     }
 
+    location /agent-stub/ {
+        proxy_pass http://127.0.0.1:5050;
+        include /etc/nginx/conf.d/proxy.conf;
+    }
+
     location /files {
         proxy_pass http://127.0.0.1:5001;
         include /etc/nginx/conf.d/proxy.conf;
