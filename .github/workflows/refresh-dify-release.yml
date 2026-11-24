@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: b122db374039d431295c915ac389a15d55481932
+          ref: be6a3c547cbbe8b6c062de917030d5fc7b8125fa
           persist-credentials: false
       - name: Build the reviewed candidate
         run: docker build --progress=plain -t candidate:upgrade .
@@ -57,6 +57,8 @@ jobs:
           docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5002/health/check | jq -e '.status=="ok" and (.version|contains("0.6.15"))'
           docker exec candidate curl -fsS --retry 20 --retry-all-errors --retry-delay 2 http://127.0.0.1:5050/openapi.json | jq -e '.info.title=="Dify Agent Run Server"'
           docker exec candidate curl -fsS http://local_sandbox:5004/healthz >/dev/null
+          docker exec candidate sh -c 'curl -fsS -H "Authorization: Bearer $DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN" http://local_sandbox:5004/v1/jobs' | jq -e '.jobs | type == "array"'
+          docker inspect "$(docker compose -f "$dq" ps -q local_sandbox)" | jq -e '.[0].Mounts | any(.Destination == "/workspace" and .Type == "volume")'
           echo "Preserved application database, stored file and existing secret hashes."
       - name: Show failed service diagnostics
         if: failure()
@@ -67,3 +69,24 @@ jobs:
               docker logs --tail 450 "$name" 2>&1 | grep -Ei 'error|fail|panic|permission|denied|no such|invalid|s6|postgres|plugin daemon|plugin.daemon|listen|migration|exception|uv|cannot|traceback|agent-backend' | sed -E 's#(://)[^ ]+:([^@ ]*)@#\1[redacted]@#g' | tail -100 || true
             fi
           done
+      - name: Check out the pinned fleet test helpers
+        if: matrix.runner == 'ubuntu-24.04'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JSONbored/aio-fleet
+          ref: c60e5784970ee97e6b13770c0af3f97cea23bd61
+          persist-credentials: false
+          path: .fleet-test-helpers
+      - name: Verify external PostgreSQL, Redis, vector, object storage and mail integrations
+        if: matrix.runner == 'ubuntu-24.04'
+        env:
+          AIO_PYTEST_USE_PREBUILT_IMAGE: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop candidate
+          DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN=unused-for-shutdown docker compose -f docs/examples/agent-local-sandbox.compose.yaml down
+          python3 -m venv "$RUNNER_TEMP/aio-test"
+          "$RUNNER_TEMP/aio-test/bin/pip" install -e './.fleet-test-helpers[app-tests]'
+          docker tag candidate:upgrade dify-aio:pytest
+          "$RUNNER_TEMP/aio-test/bin/pytest" -q tests/integration -m extended_integration
